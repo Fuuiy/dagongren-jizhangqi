@@ -15,7 +15,7 @@
   ],
   "scripts": {
     "start": "electron .",
-    "build:win": "electron-builder --win nsis --x64",
+    "build:win": "electron-builder --win nsis --x64 --publish never",
     "test": "electron test/run-p0.js && electron test/run-p1.js",
     "test:p0": "electron test/run-p0.js",
     "test:p1": "electron test/run-p1.js",
