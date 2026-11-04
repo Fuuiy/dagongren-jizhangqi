@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>打工人记账器</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<!-- 背景装饰 -->
+<div class="bg">
+  <span class="blob blob-1"></span>
+  <span class="blob blob-2"></span>
+  <span class="blob blob-3"></span>
+  <span class="dot d1"></span><span class="dot d2"></span>
+  <span class="dot d3"></span><span class="dot d4"></span><span class="dot d5"></span>
+</div>
+
+<div class="app">
+
+  <!-- 存档写不进磁盘时的常驻提醒（点击重试） -->
+  <div class="save-warn" id="saveWarn" hidden>
+    <span>⚠️ 刚才没存进磁盘（可能磁盘已满或被占用）</span>
+    <button type="button" id="btnSaveRetry">重试保存</button>
+  </div>
+
+  <!-- 自绘标题栏 -->
+  <header class="titlebar">
+    <div class="brand">
+      <span class="pig">🐷</span>
+      <span class="brand-text">打工人记账器</span>
+    </div>
+    <div class="win-ctrl">
+      <button class="wc chev-btn" id="btnCompact" title="缩成小窗" aria-label="缩成小窗">
+        <svg class="chev" viewBox="0 0 24 24" width="13" height="13" aria-hidden="true">
+          <path d="M5.5 15.2 L12 8.8 L18.5 15.2" fill="none" stroke="currentColor"
+                stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+      </button>
+      <button class="wc" id="btnSettings" title="设置">⚙</button>
+      <button class="wc" id="btnPin" title="置顶">📌</button>
+      <button class="wc" id="btnMin" title="最小化">–</button>
+      <button class="wc close" id="btnClose" title="关闭">✕</button>
+    </div>
+  </header>
+
+  <main class="scroll">
+
+    <!-- 核心：今日已赚（实时滚动）+ 每秒进账 -->
+    <section class="card hero" id="hero">
+      <div class="hero-head">
+        <span class="hero-label">今天已经赚了</span>
+        <span class="state" id="workState">还没上班</span>
+      </div>
+
+      <div class="persec" id="perSecWrap">
+        <span class="cny">¥</span><span class="num" id="todayEarned">0.000</span>
+      </div>
+
+      <div class="hero-foot">
+        <span class="rate-pill">每秒 +<b id="perSec">0.0000</b></span>
+        <span class="ot-pill" id="otPill" hidden>加班 <b id="otTime">0:00</b></span>
+        <span class="worked-text">已工作 <b id="worked">00:00:00</b></span>
+      </div>
+
+      <div class="coin-layer" id="coinLayer"></div>
+    </section>
+
+    <!-- 四档换算 -->
+    <section class="metrics">
+      <div class="metric">
+        <span class="m-ico">⏰</span>
+        <b id="perHour">¥0</b>
+        <span class="m-label">时薪</span>
+      </div>
+      <div class="metric">
+        <span class="m-ico">☀️</span>
+        <b id="perDay">¥0</b>
+        <span class="m-label">日薪</span>
+      </div>
+      <div class="metric">
+        <span class="m-ico">⏱️</span>
+        <b id="perMin">¥0</b>
+        <span class="m-label">分薪</span>
+      </div>
+      <div class="metric">
+        <span class="m-ico">💸</span>
+        <b id="perSecCard">¥0</b>
+        <span class="m-label">秒薪</span>
+      </div>
+    </section>
+
+    <!-- 目标进度 -->
+    <section class="card goal">
+      <div class="goal-head">
+        <div class="goal-title">
+          <span class="goal-emoji" id="goalEmoji">📱</span>
+          <div class="goal-text">
+            <b id="goalName">买台新手机</b>
+            <span id="goalMoney">目标 ¥5,999</span>
+          </div>
+        </div>
+        <button class="ghost" id="btnEditGoal">改一下</button>
+      </div>
+
+      <div class="bar">
+        <div class="bar-fill" id="goalFill"><span class="gloss"></span></div>
+        <span class="bar-pct" id="goalPct">0%</span>
+      </div>
+
+      <div class="goal-foot">
+        <span id="goalRemain">还差 ¥5,999</span>
+        <span id="goalEta">需工作 16.5 天</span>
+      </div>
+      <p class="goal-parts" id="goalParts">已有 ¥0 + 今日 ¥0.00</p>
+      <div class="goal-parts month month-row">
+        <span id="goalMonth">本月已赚 ¥0 · 0 天</span>
+        <button class="ghost mini" id="btnHistory">明细</button>
+      </div>
+    </section>
+
+    <!-- 今日时间轴 -->
+    <section class="card timeline">
+      <div class="tl-head">
+        <span class="tl-title">今天的时间轴</span>
+        <span class="tl-right">
+          <span class="tl-left" id="tlLeft">距下班 09:00:00</span>
+          <button class="ghost mini" id="btnFix" hidden>补录</button>
+          <button class="ghost mini" id="btnLeave">请假</button>
+        </span>
+      </div>
+      <div class="tl-track">
+        <div class="tl-fill" id="tlFill"></div>
+        <div class="tl-breaks" id="tlBreaks"></div>
+        <div class="tl-now" id="tlNow">🐷</div>
+      </div>
+      <p class="tl-warn" id="tlWarn" hidden></p>
+      <div class="tl-ends">
+        <span id="tlStart">09:00 上班</span>
+        <span id="tlEnd">18:00 下班</span>
+      </div>
+    </section>
+
+    <!-- 钱钱换算 -->
+    <section class="card convert">
+      <span class="cv-title">今天赚的钱 ≈</span>
+      <div class="cv-row">
+        <div class="cv-item"><span>🧋</span><b id="cvMilk">0.0</b><i>杯奶茶</i></div>
+        <div class="cv-item"><span>🍱</span><b id="cvRice">0.0</b><i>份午饭</i></div>
+        <div class="cv-item"><span>🎬</span><b id="cvMovie">0.0</b><i>张电影票</i></div>
+      </div>
+    </section>
+
+    <!-- 打卡 / 午休 -->
+    <div class="clock-row" id="clockRow">
+      <button class="clock side" id="btnBreak" hidden>
+        <span class="clock-ico">☕</span>
+        <span class="clock-text">午 休</span>
+      </button>
+      <button class="clock main" id="btnClock">
+        <span class="clock-ico">💪</span>
+        <span class="clock-text">上 班 打 卡</span>
+      </button>
+    </div>
+
+    <p class="clock-hint" id="clockHint">
+      <span id="hintText">到点了才能打卡</span>
+      <button class="hint-link strong" id="lnkRedo" hidden>↩ 撤销下班</button>
+    </p>
+
+    <p class="quote" id="quote">摸鱼一分钟，等于白赚 ¥0.76</p>
+  </main>
+
+  <!-- 底部横杆：正常态点它缩小，迷你态点它展开（两种态都在，位置不跳） -->
+  <footer class="dock" id="dock">
+    <span class="dock-ver" id="foot">每一秒都算数 ♡ <span class="ver" id="ver">v1.0.0</span></span>
+    <button class="compact-bar" id="compactBar" type="button" title="缩成小窗" aria-label="缩成小窗">
+      <span class="cb-grip"></span>
+    </button>
+  </footer>
+</div>
+
+<!-- 补录时间 -->
+<div class="mini-mask" id="miniMask" hidden>
+  <div class="mini-box" id="fixBox">
+    <span class="mini-handle"></span>
+    <div class="mini-head">
+      <b class="mini-title">补录一段工作时间</b>
+      <button class="ghost mini" id="btnFixClose">收起</button>
+    </div>
+    <p class="mini-sub" id="fixSub">补这一班已经过去的时间或班外加班，补完直接算钱</p>
+    <div class="mini-row">
+      <label class="field">
+        <span class="f-label">从</span>
+        <input class="tin" id="inFixStart" placeholder="09:00" inputmode="numeric" maxlength="5" autocomplete="off" />
+      </label>
+      <span class="dash">–</span>
+      <label class="field">
+        <span class="f-label">到</span>
+        <input class="tin" id="inFixEnd" placeholder="12:00" inputmode="numeric" maxlength="5" autocomplete="off" />
+      </label>
+    </div>
+    <p class="f-hint" id="fixHint"></p>
+    <div class="fix-list" id="fixList" hidden>
+      <p class="fix-list-title">今天已补 <b id="fixCount">0</b> 段 · 共 <b id="fixSum">¥0.00</b></p>
+      <div class="fix-items" id="fixItems"></div>
+    </div>
+    <div class="mini-actions">
+      <button class="btn-reset" id="btnFixCancel">取消</button>
+      <button class="btn-save" id="btnFixOk">补上</button>
+    </div>
+  </div>
+
+  <!-- 全自动 / 定点打卡：说清楚为什么不用补录 -->
+  <div class="mini-box" id="autoBox" hidden>
+    <span class="mini-handle"></span>
+    <div class="mini-head">
+      <b class="mini-title">这种模式不用补录</b>
+      <button class="ghost mini" id="btnAutoClose">收起</button>
+    </div>
+    <p class="mini-sub" id="autoSub">按班次整段算钱，漏不掉也不用补</p>
+    <ul class="auto-tips" id="autoTips">
+      <li><b>整段计薪</b><span id="autoTip1">上班到下班的每一分钟都算，午休自动跳过</span></li>
+      <li><b>时间不对</b><span>改「上班 / 下班时间」，今天的钱按新班次重算</span></li>
+      <li><b>想按真实打卡补</b><span>切到「打卡那一刻」，那里才有补录</span></li>
+    </ul>
+    <div class="mini-actions">
+      <button class="btn-reset" id="btnAutoCancel">知道了</button>
+      <button class="btn-save" id="btnAutoGo">去改班次</button>
+    </div>
+  </div>
+</div>
+
+<!-- 时间滑块选择器（所有时间输入共用同一个） -->
+<div class="tp-mask" id="tpMask" hidden>
+  <div class="tp-card" id="tpCard" role="dialog" aria-modal="true" aria-label="用滑块选时间">
+    <div class="tp-top">
+      <span class="tp-title" id="tpTitle">选时间</span>
+      <b class="tp-preview" id="tpPreview">09:00</b>
+    </div>
+
+    <div class="tp-slider">
+      <div class="tp-row">
+        <span class="tp-lab">时</span>
+        <b class="tp-val" id="tpHourVal">09</b>
+      </div>
+      <input type="range" id="tpHour" min="0" max="23" step="1" value="9" aria-label="小时" />
+      <div class="tp-ticks"><span>0</span><span>6</span><span>12</span><span>18</span><span>23</span></div>
+    </div>
+
+    <div class="tp-slider">
+      <div class="tp-row">
+        <span class="tp-lab">分</span>
+        <b class="tp-val" id="tpMinVal">00</b>
+      </div>
+      <input type="range" id="tpMin" min="0" max="59" step="1" value="0" aria-label="分钟" />
+      <div class="tp-ticks"><span>00</span><span>15</span><span>30</span><span>45</span><span>59</span></div>
+    </div>
+
+    <div class="tp-quick" id="tpQuick">
+      <button type="button" data-q="now">现在</button>
+      <button type="button" data-q="9:00">09:00</button>
+      <button type="button" data-q="12:00">12:00</button>
+      <button type="button" data-q="13:00">13:00</button>
+      <button type="button" data-q="18:00">18:00</button>
+    </div>
+
+    <div class="tp-actions">
+      <button class="btn-reset" type="button" id="tpCancel">取消</button>
+      <button class="btn-save" type="button" id="tpOk">就用这个</button>
+    </div>
+  </div>
+</div>
+
+<!-- 每日明细 -->
+<div class="sheet-mask" id="histMask"></div>
+<div class="sheet" id="histSheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-title">
+    <span>每日明细</span>
+    <button class="ghost" id="btnCloseHist">收起</button>
+  </div>
+  <div class="form hist-list" id="histList"></div>
+</div>
+
+<!-- 设置面板 -->
+<div class="sheet-mask" id="mask"></div>
+<div class="sheet" id="sheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-title">
+    <span>我的上班参数</span>
+    <button class="ghost" id="btnCloseSheet">收起</button>
+  </div>
+
+  <div class="form">
+    <div class="field">
+      <div class="f-line">
+        <span class="f-label">月到手（税后）</span>
+        <span class="f-note" id="salaryEcho"></span>
+      </div>
+      <input type="number" id="inSalary" min="0" step="100" inputmode="decimal" />
+    </div>
+
+    <div class="field">
+      <div class="f-line">
+        <span class="f-label">每月工作天数</span>
+        <span class="f-num">
+          <input type="number" id="inDays" min="1" max="31" step="0.5" inputmode="decimal" />
+          <i>天</i>
+        </span>
+      </div>
+      <div class="seg days-seg" id="segDays">
+        <button data-mode="double">双休</button>
+        <button data-mode="bigsmall">大小周</button>
+        <button data-mode="single">单休</button>
+      </div>
+      <div class="days-foot">
+        <p class="f-hint" id="daysHint"></p>
+        <button class="ghost mini" id="btnHoliday">更新</button>
+      </div>
+    </div>
+
+    <div class="row">
+      <label class="field">
+        <span class="f-label">上班时间</span>
+        <input type="text" class="tin" id="inStart" placeholder="09:00" inputmode="numeric" maxlength="5" autocomplete="off" />
+      </label>
+      <label class="field">
+        <span class="f-label">下班时间</span>
+        <input type="text" class="tin" id="inEnd" placeholder="18:00" inputmode="numeric" maxlength="5" autocomplete="off" />
+      </label>
+    </div>
+
+    <p class="f-hint" id="spanHint"></p>
+
+    <div class="field">
+      <div class="lunch-row">
+        <span class="f-label">午休</span>
+        <input type="text" class="tin tin-sm" id="inLunchStart" placeholder="12:00" inputmode="numeric" maxlength="5" autocomplete="off" />
+        <span class="dash">–</span>
+        <input type="text" class="tin tin-sm" id="inLunchEnd" placeholder="13:00" inputmode="numeric" maxlength="5" autocomplete="off" />
+        <span class="f-note" id="lunchNote">1 小时</span>
+      </div>
+      <p class="f-hint" id="lunchHint"></p>
+    </div>
+
+    <div class="field" id="hoursRow" hidden>
+      <span class="f-label">每日有效工时（小时）</span>
+      <input type="number" id="inDailyHours" min="0.5" max="24" step="0.5" inputmode="decimal" placeholder="不填就按班次自动算" />
+      <p class="f-hint">这个数字决定你每小时值多少钱，填你实际能干满的工时</p>
+    </div>
+
+    <div class="field">
+      <span class="f-label">计时方式</span>
+      <div class="mode-cards" id="modeCards">
+        <button type="button" class="mcard" data-mode="click" data-auto="0">
+          <b>打卡那一刻</b>
+          <i>随时可打</i>
+        </button>
+        <button type="button" class="mcard" data-mode="schedule" data-auto="0">
+          <b>定点打卡</b>
+          <i>提前 30 分</i>
+        </button>
+        <button type="button" class="mcard" data-mode="schedule" data-auto="1">
+          <b>全自动</b>
+          <i>到点就跑</i>
+        </button>
+      </div>
+      <p class="f-hint" id="modeHint"></p>
+    </div>
+
+    <div class="divider"></div>
+
+    <details class="grp" id="goalGroup">
+      <summary id="goalSummary">目标 · 买台新手机 ¥5,999</summary>
+      <div class="grp-body">
+        <div class="field">
+          <div class="emoji-row" id="emojiRow"></div>
+        </div>
+
+        <label class="field">
+          <span class="f-label">目标名称</span>
+          <input type="text" id="inGoalName" maxlength="12" placeholder="想买点什么" />
+        </label>
+
+        <div class="row">
+          <label class="field">
+            <span class="f-label">目标金额（元）</span>
+            <input type="number" id="inGoalAmount" min="1" step="1" inputmode="decimal" />
+          </label>
+          <label class="field">
+            <span class="f-label">已有存款（元，不含今天）</span>
+            <input type="number" id="inSaved" min="0" step="100" inputmode="decimal" />
+          </label>
+        </div>
+      </div>
+    </details>
+
+    <div class="field">
+      <span class="f-label">数据备份</span>
+      <div class="row">
+        <button class="btn-reset data-btn" id="btnExport">导出数据</button>
+        <button class="btn-reset data-btn" id="btnImport">导入数据</button>
+      </div>
+      <p class="f-hint" id="dataHint">导出成 .json 备份；导入会覆盖当前所有数据，导入前自动留一份备份</p>
+      <button class="link-mini" id="btnFirstRun">回到首次使用（清空全部数据）</button>
+    </div>
+
+    <details class="calc-note">
+      <summary>这些数字怎么算的？</summary>
+      <div class="calc-body">
+        <p><b>日薪</b> = 月到手 ÷ 每月工作天数</p>
+        <p><b>有效工时</b> = 下班 − 上班 − 午休（只扣落在班内那段）</p>
+        <p><b>时薪</b> = 日薪 ÷ (有效工时 ÷ 60)</p>
+        <p><b>分薪 / 秒薪</b> = 时薪 ÷ 60 / 3600</p>
+        <p><b>今日已赚</b> = 实际工作时间 × 秒薪</p>
+        <p class="calc-tip">不含五险一金、个税、绩效与加班费，图的是「一眼看见」。</p>
+      </div>
+    </details>
+  </div>
+
+  <p class="form-err" id="formErr"></p>
+
+  <p class="form-warn" id="formWarn" hidden></p>
+  <div class="sheet-actions">
+    <button class="btn-reset" id="btnReset">清零累计</button>
+    <button class="btn-save" id="btnSave">存好啦 ♪</button>
+  </div>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

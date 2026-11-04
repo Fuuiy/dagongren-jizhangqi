@@ -1,0 +1,51 @@
+# electron-builder 配置（独立文件，不动 package.json）
+# 产物：release/打工人记账器-<版本>-安装包.exe（NSIS，可选安装目录、有开始菜单/桌面图标、可卸载）
+
+appId: com.workbuddy.dagongren.jizhangqi
+productName: 打工人记账器
+copyright: Copyright © 2026 打工人记账器
+
+directories:
+  output: release
+  buildResources: build
+
+# 只把运行时真正需要的东西打进 app.asar（测试、预览图、报告、旧 dist 都不带）
+files:
+  - main.js
+  - preload.js
+  - win-geometry.js
+  - package.json
+  - src/**/*
+  - build/icon.png
+
+# 窗口图标走的是真实文件路径，从 asar 里解出来更稳
+asarUnpack:
+  - build/icon.png
+
+compression: normal
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: build/icon.png
+  artifactName: 打工人记账器-${version}-安装包.${ext}
+  # 不申请管理员权限就能装（装到当前用户目录），公司电脑也好使
+  requestedExecutionLevel: asInvoker
+
+nsis:
+  oneClick: false                      # 出「下一步/下一步」的向导，而不是一键装完
+  perMachine: false                    # 默认装当前用户，不需要管理员
+  allowElevation: true
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: 打工人记账器
+  uninstallDisplayName: 打工人记账器 ${version}
+  deleteAppDataOnUninstall: false      # 卸载保留记账数据，误删太可惜
+  runAfterFinish: true
+  installerLanguages:
+    - zh_CN
+  language: "2052"
+  license: null
