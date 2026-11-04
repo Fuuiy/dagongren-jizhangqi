@@ -9,6 +9,7 @@
   <img alt="electron" src="https://img.shields.io/badge/Electron-33-47848F?style=flat-square&logo=electron&logoColor=white">
   <img alt="license" src="https://img.shields.io/badge/license-MIT-97CA00?style=flat-square">
   <img alt="no network" src="https://img.shields.io/badge/data-100%25%20local-FFB86B?style=flat-square">
+  <a href="https://github.com/Fuuiy/dagongren-jizhangqi/releases/latest"><img alt="download" src="https://img.shields.io/badge/download-exe-2EA043?style=flat-square&logo=github"></a>
 </p>
 
 ![主界面](docs/screenshots/1-main.png)
@@ -52,7 +53,7 @@
 
 ## 下载安装
 
-**方式一：安装包（推荐）** — 到本仓库的 **Releases** 页面下载 `打工人记账器-1.0.0-安装包.exe`，双击 → 下一步 → 完成。装完桌面和开始菜单都有图标，卸载走 Windows「设置 → 应用」。
+**方式一：安装包（推荐）** — 到本仓库的 [Releases](https://github.com/Fuuiy/dagongren-jizhangqi/releases/latest) 页面下载 `dagongren-jizhangqi-1.0.0-setup.exe`，双击 → 下一步 → 完成。装完桌面和开始菜单都有图标，卸载走 Windows「设置 → 应用」。
 
 - 约 88 MB，只支持 Windows x64
 - **不需要管理员权限**，装到当前用户目录，公司电脑也能装
@@ -62,8 +63,8 @@
 **方式二：从源码跑**
 
 ```bash
-git clone <this-repo>
-cd githubYY
+git clone https://github.com/Fuuiy/dagongren-jizhangqi.git
+cd dagongren-jizhangqi
 npm install
 
 # 直接运行
