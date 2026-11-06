@@ -2016,23 +2016,29 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .toast {
   position: fixed;
   left: 50%;
-  top: 54px;                 /* 贴标题栏下方：不会挡住底部的打卡按钮 */
-  transform: translateX(-50%) translateY(-6px);
+  top: 52px;                 /* 贴标题栏下方：不挡底部的打卡按钮 */
+  transform: translateX(-50%) translateY(-8px) scale(.97);
   z-index: 200;
-  background: rgba(120, 86, 96, .93);
-  color: #fff;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: .3px;
-  padding: 8px 15px;
-  border-radius: 12px;
-  box-shadow: 0 10px 24px -10px rgba(120, 86, 96, .6);
+  max-width: 92%;
+  text-align: center;
+  background: #FFFCFA;
+  border: 1px solid #FFD9E2;
+  color: #6F5A62;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.5;
+  letter-spacing: .2px;
+  padding: 9px 16px;
+  border-radius: 14px;
+  box-shadow: 0 14px 30px -16px rgba(200, 120, 145, .55), 0 2px 6px -2px rgba(200, 120, 145, .16);
   opacity: 0;
   pointer-events: none;
-  transition: opacity .18s ease, transform .18s ease;
+  transition: opacity .2s ease, transform .2s cubic-bezier(.32, 1.2, .6, 1);
 }
 .toast[hidden] { display: none; }
-.toast.on { opacity: 1; transform: translateX(-50%) translateY(0); }
+.toast.on { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+/* 小窗里提示也别撑太宽 */
+body.compact .toast { font-size: 11.5px; padding: 7px 12px; }
 
 .dlg-mask {
   position: fixed;
@@ -2119,4 +2125,13 @@ body.compact .def-bar { display: none; }   /* 迷你条只有 200 多高，塞�
 /* 二级收紧时，「应工作」参照行属于补充信息，可以收掉 */
 body.tight2 .tl-ref { display: none; }
 /* 二级收紧时，「用的还是默认值」这条提醒也先让位——打卡按钮更重要 */
-body.tight2 .def-bar { display: none; }
+/* 二级收紧时黄条还要在——它是「改工资」的入口，藏了用户就找不到该点哪。
+   压成一行小字，实在放不下（三级）才收掉 */
+body.tight2 .def-bar {
+  display: block;
+  padding: 5px 10px;
+  font-size: 11px;
+  line-height: 1.35;
+  border-radius: 10px;
+}
+body.tight3 .def-bar { display: none; }

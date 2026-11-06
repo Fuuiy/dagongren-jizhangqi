@@ -184,7 +184,19 @@ ipcMain.on('app:copy', (event, t) => {
 ipcMain.handle('app:tray', () => ({
   hasTray: !!tray && !tray.isDestroyed(),
   icon: trayMeta ? trayMeta.icon : null,
-  tooltip: trayMeta ? trayMeta.tooltip : ''
+  tooltip: trayMeta ? trayMeta.tooltip : '',
+  // 只读的窗口状态：打包冒烟用它确认「小窗点下去到底有没有真的 setBounds」
+  win: (() => {
+    if (!win) return null;
+    try {
+      return {
+        bounds: win.getBounds(),
+        compacted: compacted,
+        maximized: win.isMaximized(),
+        visible: win.isVisible()
+      };
+    } catch (e) { return null; }
+  })()
 }));
 
 ipcMain.handle('holidays:fetch', (event, year) => new Promise((resolve) => {

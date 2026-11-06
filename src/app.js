@@ -944,14 +944,16 @@
   // 绝不牺牲打卡按钮（小屏笔记本 1366×768@125% 就靠这个）
   function fitGuard() {
     const body = document.body;
-    body.classList.remove('tight', 'tight2');
+    body.classList.remove('tight', 'tight2', 'tight3');
     if (body.classList.contains('compact')) return;
     const sc = document.querySelector('.scroll');
     if (!sc) return;
     if (sc.scrollHeight - sc.clientHeight <= 0) return;
-    body.classList.add('tight');
+    body.classList.add('tight');                 // 一级：收掉吐槽那行
     if (sc.scrollHeight - sc.clientHeight <= 0) return;
-    body.classList.add('tight2');
+    body.classList.add('tight2');                // 二级：收换算卡/目标分项，黄条压成一行
+    if (sc.scrollHeight - sc.clientHeight <= 0) return;
+    body.classList.add('tight3');                // 三级：真放不下才收掉黄条
   }
 
   function renderTimeline(now, st) {
@@ -2949,13 +2951,18 @@
     const el = $('#toast');
     if (!el) return;
     el.textContent = msg;
+    // 首页挂着「默认工资」黄条时往下让一行，别让两个提示叠在一起
+    const bar = $('#defBar');
+    const barShown = bar && !bar.hidden && getComputedStyle(bar).display !== 'none';
+    const barH = barShown ? Math.round(bar.getBoundingClientRect().height + 8) : 0;
+    el.style.top = (50 + barH) + 'px';
     el.hidden = false;
     requestAnimationFrame(() => el.classList.add('on'));
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => {
       el.classList.remove('on');
-      setTimeout(() => { el.hidden = true; }, 220);
-    }, 1500);
+      setTimeout(() => { el.hidden = true; }, 240);
+    }, 2800);
   }
 
   let dlgResolve = null;
@@ -2995,7 +3002,7 @@
         save();
         closeSheet();
         render();
-        toast('先用默认值，随时点顶部黄条改成你的');
+        toast('先用默认值了，点「改一下」就能改成你的');
       });
   }
 
@@ -3325,7 +3332,16 @@
     bindTimePicker();
     $('#btnBreak').addEventListener('click', toggleBreak);
     $('#lnkRedo').addEventListener('click', redoShift);
-    $('#btnEditGoal').addEventListener('click', openSheet);
+    $('#btnEditGoal').addEventListener('click', () => {
+      openSheet();
+      // 用的还是默认值时，「改一下」多半是想改工资，直接把光标送过去
+      if (!cfg.confirmedByUser) {
+        setTimeout(() => {
+          const el = $('#inSalary');
+          if (el) { el.focus(); el.select && el.select(); }
+        }, 280);
+      }
+    });
     $('#mask').addEventListener('click', onCloseSheetClick);
     $('#btnCloseSheet').addEventListener('click', onCloseSheetClick);
     $('#btnSave').addEventListener('click', saveSheet);

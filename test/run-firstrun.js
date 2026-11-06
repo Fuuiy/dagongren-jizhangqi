@@ -166,6 +166,64 @@ async function main() {
     !re2.sheetOn && re2.defBarShown && re2.confirmed === false,
     '面板=' + re2.sheetOn + ' 黄条=' + re2.defBarShown + ' 已确认=' + re2.confirmed);
 
+  /* ---------- F15 版面收紧（tight2）也要保住黄条 ---------- */
+  // 用户实际窗口是 720 高，内容一满就会走到 tight2；以前这条 CSS 直接把黄条藏了，
+  // 而 toast 还让用户「点顶部黄条」→ 用户根本找不到入口
+  await R(`document.body.classList.add('tight', 'tight2'); 'ok'`);
+  await sleep(220);
+  const t2b = await R(`(() => {
+    const b = document.querySelector('#defBar');
+    if (!b) return { display: 'missing' };
+    const cs = getComputedStyle(b);
+    const r = b.getBoundingClientRect();
+    return { display: cs.display, h: Math.round(r.height), fontSize: cs.fontSize,
+      text: (b.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 30) };
+  })()`);
+  record('F15', '版面二级收紧时黄条仍可见（压成一行），不再被 display:none 藏掉',
+    t2b.display !== 'none' && t2b.h > 10 && t2b.h < 40,
+    'display=' + t2b.display + ' 高度=' + t2b.h + ' 字号=' + t2b.fontSize);
+  await R(`document.body.classList.remove('tight', 'tight2', 'tight3'); 'ok'`);
+  await sleep(200);
+
+  /* ---------- F16/F17 提示文案指向「改一下」，且停得够久 ---------- */
+  await reset();
+  await sleep(500);
+  await R(CLICK('#btnCloseSheet'));
+  await sleep(420);
+  await R(CLICK('#dlgOk'));
+  await sleep(260);
+  const tb1 = await R(`(() => { const t = document.querySelector('#toast');
+    return { text: t.textContent || '', on: t.classList.contains('on'),
+      top: Math.round(t.getBoundingClientRect().top) }; })()`);
+  const barRect = await R(`(() => { const b = document.querySelector('#defBar');
+    const r = b.getBoundingClientRect(); return { h: Math.round(r.height), bottom: Math.round(r.bottom) }; })()`);
+  record('F16', '用默认值后的提示改成指向「改一下」（黄条会被版面收紧，不能只让人点黄条）',
+    tb1.text.indexOf('改一下') >= 0 && tb1.text.indexOf('黄条') < 0,
+    '提示=' + tb1.text);
+  record('F17', '提示气泡不压在黄条上（自动让到黄条下面）',
+    tb1.top >= barRect.bottom - 2,
+    '气泡 top=' + tb1.top + ' 黄条 bottom=' + barRect.bottom);
+  await sleep(2000);                                  // 累计约 2.3s
+  const tb2 = await R(`document.querySelector('#toast').classList.contains('on')`);
+  await sleep(1100);                                  // 累计约 3.4s
+  const tb3 = await R(`document.querySelector('#toast').hidden`);
+  record('F18', '提示停留时间 2.3 秒时还在、3.4 秒后已收起（原来只有 1.5 秒）',
+    tb2 === true && tb3 === true, '2.3s 还在=' + tb2 + ' 3.4s 已收起=' + tb3);
+
+  /* ---------- F19 「改一下」能进设置，且光标落在工资框 ---------- */
+  await R(CLICK('#btnEditGoal'));
+  await sleep(700);
+  const editRet = await R(`(() => ({
+    sheet: document.querySelector('#sheet').classList.contains('on'),
+    focus: document.activeElement ? document.activeElement.id : '',
+    salary: (document.querySelector('#inSalary') || {}).value
+  }))()`);
+  record('F19', '点「改一下」打开设置面板；还没确认真实工资时，光标直接落在「月到手」输入框',
+    editRet.sheet === true && editRet.focus === 'inSalary' && editRet.salary === '8000',
+    '面板=' + editRet.sheet + ' 焦点=' + editRet.focus + ' 工资值=' + editRet.salary);
+  await R(`if (document.querySelector('#sheet').classList.contains('on')) document.querySelector('#btnCloseSheet').click(); 'ok'`);
+  await sleep(300);
+
   /* ---------- F6 正常保存 = 亲自确认 ---------- */
   await reset();
   await sleep(600);
@@ -328,7 +386,7 @@ async function main() {
     done.nextGoalShown === true && undone.nextGoalShown === false,
     '达成时=' + done.nextGoalShown + ' 未达成时=' + undone.nextGoalShown);
 
-  record('F15', '全流程无未捕获 JS 异常', consoleErrors.length === 0,
+  record('F20', '全流程无未捕获 JS 异常', consoleErrors.length === 0,
     consoleErrors.length ? consoleErrors.slice(0, 2).join(' / ') : '无');
 
   const pass = results.filter((r) => r.pass).length;

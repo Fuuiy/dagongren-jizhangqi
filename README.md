@@ -4,7 +4,7 @@
 > 一个 424×720 的 Windows 桌面小挂件，喝口水、开个会、熬个夜，都能看见自己赚了多少。
 
 <p>
-  <img alt="version" src="https://img.shields.io/badge/version-1.2.3-FF8FA3?style=flat-square">
+  <img alt="version" src="https://img.shields.io/badge/version-1.2.4-FF8FA3?style=flat-square">
   <img alt="platform" src="https://img.shields.io/badge/platform-Windows%20x64-4C9AFF?style=flat-square">
   <img alt="electron" src="https://img.shields.io/badge/Electron-33-47848F?style=flat-square&logo=electron&logoColor=white">
   <img alt="license" src="https://img.shields.io/badge/license-MIT-97CA00?style=flat-square">
@@ -125,7 +125,7 @@ export ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-b
 
 ## 测试
 
-这个项目的测试不是摆设：**20 个 Electron 自动化套件、225 条断言**，全部真跑真实渲染进程（不是 mock DOM），包括真实 `execCommand` 键盘编辑、真实点击、真实安装包冒烟。
+这个项目的测试不是摆设：**20 个 Electron 自动化套件、230 条断言**，全部真跑真实渲染进程（不是 mock DOM），包括真实 `execCommand` 键盘编辑、真实点击、真实安装包冒烟。
 
 | 套件 | 覆盖 | 断言 |
 |---|---|---|
@@ -138,7 +138,7 @@ export ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-b
 | `run-window.js` | 窗口形态：小窗往返、小屏自适应、几何漂移 | 14 |
 | `run-mode-reset.js` | 切换计时方式：金额归零、不替你打卡、补录保留 | 12 |
 | `run-tray.js` | 托盘：点 × 只隐藏、图标开关、退出路径 | 7 |
-| `run-firstrun.js` | 首启校验、清零确认、倍率、关闭行为、快捷键、数据路径 | 15 |
+| `run-firstrun.js` | 首启校验、默认值提示、气泡避让与时长、改一下聚焦、倍率、关闭行为、快捷键 | 20 |
 | `run-clickmode.js` | 打卡模式：应工作参照、未干满确认、超时提示 | 10 |
 | `run-switch.js` | 切换计时方式：金额归零、从切换时刻起算、次日失效 | 12 |
 | `run-fix.js` | 补录：真实入账段、重叠判定、老数据迁移、删除退账 | 17 |

@@ -208,35 +208,46 @@ async function main() {
   await R(`document.querySelector('#btnCompact').click(); 'ok'`);
   // 窗口 resize 是异步的：固定等 1.3 秒在机器忙的时候会读到旧尺寸（曾偶发失败两次）
   // 改成轮询到高度真的降下来，最多等 4.5 秒
-  const READ_G = `(() => ({ w: window.outerWidth, h: window.outerHeight, compact: document.body.classList.contains('compact'),
+  const READ_G = `(async () => ({ w: window.outerWidth, h: window.outerHeight, compact: document.body.classList.contains('compact'),
     title: document.querySelector('#compactBar').title,
     grip: Math.round(document.querySelector('.cb-grip').getBoundingClientRect().width),
+    main: await (window.desktop && window.desktop.trayState ? window.desktop.trayState().then((r) => r && r.win) : null),
     dbg: { tb: document.querySelector('.titlebar').offsetHeight,
       heroH: Math.ceil(document.querySelector('#hero').getBoundingClientRect().height),
       dockH: document.querySelector('#dock').offsetHeight,
       frozen: document.querySelector('#hero').style.padding || '(未冻结)',
       body: document.body.className } }))()`;
+  // 注意：渲染进程的 window.outerHeight 在窗口 resize 后会滞后几拍，
+  // 曾因此误判成「小窗没收下去」——其实主进程 bounds 早就是 218 了。
+  // 一律以主进程 bounds 为准。
+  const hOf = (g) => (g && g.main && g.main.bounds) ? g.main.bounds.height : (g ? g.h : 0);
   let g1 = null;
   for (let i = 0; i < 30; i++) {
     await sleep(300);
     g1 = await R(READ_G);
-    if (g1 && g1.h < g0.h - 50) break;
+    if (hOf(g1) < g0.h - 50 && g1.compact === true && g1.grip > 60) break;
   }
   await R(`document.querySelector('#compactBar').click(); 'ok'`);
   let g2 = null;
   for (let i = 0; i < 24; i++) {
     await sleep(250);
-    g2 = await R(`(() => ({ w: window.outerWidth, h: window.outerHeight, compact: document.body.classList.contains('compact'),
+    g2 = await R(`(async () => ({ w: window.outerWidth, h: window.outerHeight, compact: document.body.classList.contains('compact'),
       title: document.querySelector('#compactBar').title,
-      grip: Math.round(document.querySelector('.cb-grip').getBoundingClientRect().width) }))()`);
-    if (g2 && g2.h > g0.h - 50) break;
+      grip: Math.round(document.querySelector('.cb-grip').getBoundingClientRect().width),
+      main: await (window.desktop && window.desktop.trayState ? window.desktop.trayState().then((r) => r && r.win) : null) }))()`);
+    if (hOf(g2) > g0.h - 50 && g2.compact === false && g2.grip < 60) break;
   }
+  const H1 = hOf(g1);
+  const H2 = hOf(g2);
   record('EXE-06', '打包版小窗/展开：只收高度（宽度不变）、横杆加长；展开恢复原宽高',
-    g1.compact && g1.h < g0.h - 200 && Math.abs(g1.w - g0.w) <= 2 && g1.grip > g2.grip + 20
-    && !g2.compact && g2.h >= g0.h - 4 && Math.abs(g2.w - g0.w) <= 2 && g2.title === '缩成小窗',
-    '完整 ' + g0.w + '×' + g0.h + ' → 小窗 ' + g1.w + '×' + g1.h + '（横杆 ' + g1.grip + '） → 展开 '
-    + g2.w + '×' + g2.h + '（横杆 ' + g2.grip + '）'
-    + (g1.h >= g0.h - 200 ? ' | 没收下去，分量=' + JSON.stringify(g1.dbg) : ''));
+    // 小窗高度落在 150–260（实测 216–218，DOM 测量有 1–2px 浮动），不能只是"比原来矮"
+    g1.compact && H1 > 150 && H1 < 260 && Math.abs(g1.w - g0.w) <= 2 && g1.grip > g2.grip + 20
+    && !g2.compact && H2 >= g0.h - 4 && Math.abs(g2.w - g0.w) <= 2 && g2.title === '缩成小窗',
+    '完整 ' + g0.w + '×' + g0.h + ' → 小窗 ' + g1.w + '×' + H1 + '（横杆 ' + g1.grip + '） → 展开 '
+    + g2.w + '×' + H2 + '（横杆 ' + g2.grip + '）'
+    + (H1 >= 260
+      ? ' | 没收下去，分量=' + JSON.stringify(g1.dbg) + ' 主进程=' + JSON.stringify(g1.main)
+      : ''));
 
   // 7. 退出重开：数据持久化
   const settledBefore = (await R(SNAP)).cfg.settled;
