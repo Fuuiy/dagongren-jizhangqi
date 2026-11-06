@@ -506,6 +506,57 @@
     cfg.todaySettled = b;
   }
 
+  // 今天「手动补录」一共加了多少钱/多少秒。
+  // 补录是用户自己加的一段，跟计时方式无关，切换模式时不能被顺手抹掉。
+  function todayFixTotals(key) {
+    const list = (cfg.fixDay === key ? (cfg.fixRanges || []) : []);
+    let amount = 0, inSec = 0, otSec = 0;
+    for (const fr of list) {
+      const at = typeof fr.at === 'number' ? dayKey(fr.at) : key;
+      if (at !== key) continue;                     // 只算这一班补的，别的班不动
+      amount += typeof fr.amount === 'number' ? fr.amount : 0;
+      inSec += typeof fr.inSec === 'number' ? fr.inSec
+        : (typeof fr.sec === 'number' ? fr.sec : 0);
+      otSec += typeof fr.otSec === 'number' ? fr.otSec : 0;
+    }
+    return { amount, inSec, otSec };
+  }
+
+  // 换了计时方式 = 这一班的时间口径整个换了：
+  // 旧规则下「按时间/打卡」算出来的钱一律作废，首页从 0 重新开始；
+  // 人工补录的那部分保留（那是用户明确加进去的，不该被模式切换吃掉）。
+  function resetTodayTiming(now) {
+    const todayK = dayKey(now);
+    const shiftK = dayKey(shiftAt(now).start);      // 夜班凌晨时这一班算昨天
+    const t = cfg.todaySettled;
+    // 只动「属于今天或当前这一班」的账本，昨天以前的绝不能被顺手抹掉
+    const target = (t && (t.day === todayK || t.day === shiftK)) ? t.day : null;
+
+    if (!target) {
+      cfg.todaySettled = null;
+      return;
+    }
+
+    const fix = todayFixTotals(target);
+    const timingAmt = Math.max(0, (t.amount || 0) - fix.amount);
+
+    if (timingAmt > 0.0005) {
+      // 累计与当日明细一起退回，否则「本月已赚」会多出一笔无主的钱
+      cfg.settled = Math.max(0, cfg.settled - timingAmt);
+      if (typeof cfg.dailyLog[target] === 'number') {
+        const left = cfg.dailyLog[target] - timingAmt;
+        if (left < 0.005) delete cfg.dailyLog[target];
+        else cfg.dailyLog[target] = left;
+      }
+    }
+
+    if (fix.amount > 0.0005 || fix.inSec > 0 || fix.otSec > 0) {
+      cfg.todaySettled = { day: target, seconds: fix.inSec, amount: fix.amount, otSec: fix.otSec };
+    } else {
+      cfg.todaySettled = null;
+    }
+  }
+
   // 计费秒数：不超过当天应出勤时长（第 3 条封顶）
   function billableOf(sec, alreadySec) {
     const c = calc();
@@ -1314,6 +1365,13 @@
     if (btn) btn.addEventListener('click', () => setCompact(!compact));
     // 同一个横杆：正常态缩小、迷你态展开
     if (bar) bar.addEventListener('click', () => setCompact(!compact));
+    // 托盘右键菜单里的「缩成小窗 / 展开完整面板」
+    try {
+      const api = window.desktop;
+      if (api && api.onTrayCommand) {
+        api.onTrayCommand((cmd) => { if (cmd === 'toggle-compact') setCompact(!compact); });
+      }
+    } catch (e) { /* 浏览器里跑测试时没有托盘，忽略 */ }
     syncCompactBar();
 
     // 迷你态窗口变窄后，卡片换行可能让实际高度差几个像素：量一次再校正。
@@ -2751,12 +2809,18 @@
     cfg.autoRun = !!pendingAuto;
 
     // 换了计时方式，旧的「收工标记」属于上一套规则，必须清掉，
-    // 否则自动模式会误判成「今日已收工」却仍在计费
-    if (oldMode !== cfg.clockFrom || oldAuto !== cfg.autoRun) {
+    // 否则自动模式会误判成「今日已收工」却仍在计费；
+    // 今天已经按旧规则算出来的钱也一并作废（保留人工补录），首页归零重来
+    const modeChanged = oldMode !== cfg.clockFrom || oldAuto !== cfg.autoRun;
+    if (modeChanged) {
       cfg.doneShift = null;
       cfg.lastShift = null;
       cfg.segments = [];
       cfg.clockIn = null;
+      resetTodayTiming(now);
+      // 换了玩法就不能替用户「接着计时」：
+      // 打卡那一刻要他自己点打卡，否则切完模式会凭空开始上班（v1.1.0 前就是这样）
+      wasRunning = false;
     }
 
     const dhVal = $('#inDailyHours') ? num($('#inDailyHours').value, 0) : 0;

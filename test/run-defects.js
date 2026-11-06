@@ -115,22 +115,35 @@ async function openSettings() {
   await sleep(200);
 }
 
+/* ---------- 相对今天的日期键（写死日期会让用例只在"那天"通过） ---------- */
+const _d0 = new Date();
+const DATE = {
+  y: _d0.getFullYear(), mo: _d0.getMonth() + 1, d: _d0.getDate(),
+  key: (dt) => dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0')
+    + '-' + String(dt.getDate()).padStart(2, '0')
+};
+const TODAY_K = DATE.key(_d0);
+const TMR_K = DATE.key(new Date(_d0.getTime() + 24 * 3600e3));
+// 不补零的老键（2026-11-4 这种）
+const TODAY_K_LOOSE = DATE.y + '-' + DATE.mo + '-' + DATE.d;
+const FIRST_K_LOOSE = DATE.y + '-' + DATE.mo + '-1';
+
 /* ---------- 缺陷回归用例 ---------- */
 
 /* D-07【轻微】dayKey 不补零 → 同一天拆两行。修复：dayKey 补零 + 迁移合并旧键 */
 async function d07() {
-  await reset({ dailyLog: { '2026-11-4': 100 }, leaves: { '2026-11-1': true } });
+  await reset({ dailyLog: { [TODAY_K_LOOSE]: 100 }, leaves: { [FIRST_K_LOOSE]: true } });
   await punchToday();
   await R(`window.__at(11); document.querySelector('#btnClock').click(); 'ok'`);   // 11:00 下班结算
   await sleep(600);
   const s = await R(SNAP);
   const keys = Object.keys(s.cfg.dailyLog || {});
-  const merged = keys.length === 1 && keys[0] === '2026-11-04'
-    && near(s.cfg.dailyLog['2026-11-04'], 100 + perDay * 1 / 8, 0.5);
+  const merged = keys.length === 1 && keys[0] === TODAY_K
+    && near(s.cfg.dailyLog[TODAY_K], 100 + perDay * 1 / 8, 0.5);
   await R(CLICK('#btnHistory'));
   await sleep(400);
   const rows = await R(`[...document.querySelectorAll('#histList .hist-row')].length`);
-  record('D-07', 'dayKey 不补零：旧键「2026-11-4」迁移合并为「2026-11-04」', merged,
+  record('D-07', 'dayKey 不补零：旧键「' + TODAY_K_LOOSE + '」迁移合并为「' + TODAY_K + '」', merged,
     '键=' + JSON.stringify(keys) + ' 金额=' + ((s.cfg.dailyLog[keys[0]] || 0).toFixed(2)) + '（≈' + (100 + perDay / 8).toFixed(2) + '）明细行数=' + rows + '（11-01 请假 1 行 + 11-04 金额 1 行）');
 }
 async function punchToday() {
@@ -186,11 +199,11 @@ async function d04() {
   await R(CLICK('#btnSave'));
   await sleep(500);
   const s = await R(SNAP);
-  const k4 = '2026-11-04', k5 = '2026-11-05';
+  const k4 = TODAY_K, k5 = TMR_K;
   const amt = s.cfg.dailyLog[k4] || 0;
   const ok = near(amt, perDay * 2 / 8, 0.5) && !s.cfg.dailyLog[k5];
-  record('D-04', '夜班跨零点改薪：已计时部分记到班次开始日（11-04），不落到次日', ok,
-    'dailyLog[2026-11-04]=' + amt.toFixed(2) + '（≈' + (perDay * 2 / 8).toFixed(2) + '） dailyLog[2026-11-05]=' + (s.cfg.dailyLog[k5] || '无'));
+  record('D-04', '夜班跨零点改薪：已计时部分记到班次开始日（' + k4 + '），不落到次日', ok,
+    'dailyLog[' + k4 + ']=' + amt.toFixed(2) + '（≈' + (perDay * 2 / 8).toFixed(2) + '） dailyLog[' + k5 + ']=' + (s.cfg.dailyLog[k5] || '无'));
 }
 
 /* D-05【轻微】午休完全在班外：卡片显示总时长与「不会被扣除」矛盾 */

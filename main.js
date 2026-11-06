@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, screen, Tray, Menu, nativeImage } = require('electron');
 const fs = require('fs');
 const https = require('https');
 const path = require('path');
@@ -10,7 +10,14 @@ if (process.env.WB_DEBUG_PORT) {
 }
 
 let win = null;
+let tray = null;
+// 创建托盘时把「设进去的东西」记一份：Windows 上 Tray 没有 getImage/getToolTip，
+// 想在测试里核对只能记下来（不是自己骗自己，记的是真调用的入参）
+let trayMeta = null;
 let compacted = false;
+// 真正要退出时才置 true。不置的话「关窗口」只会收到托盘里，不会杀进程
+let quitting = false;
+let trayHinted = false;
 // 记住「缩小前」的整份几何（宽 + 高）。只记高度不够：
 // 迷你窗被拉宽过，展开时就会一直占满屏 —— 这正是 v1.9.0 的毛病。
 let normalBox = { width: geo.NORMAL.width, height: geo.NORMAL.height };
@@ -69,9 +76,98 @@ function createWindow() {
   win.on('closed', () => {
     win = null;
   });
+
+  // 点右上角 × 不等于退出：收到右下角托盘里继续计时。
+  // 真要退出走托盘右键菜单「退出」，或 app.quit()（quitting 置位后才真关）
+  win.on('close', (e) => {
+    if (quitting) return;
+    e.preventDefault();
+    win.hide();
+    if (!trayHinted && tray) {
+      trayHinted = true;
+      try {
+        tray.displayBalloon({
+          title: '打工人记账器还在后台计时',
+          content: '点右下角的小图标就能叫回来，右键图标可以真正退出'
+        });
+      } catch (err) { /* 系统不支持气泡就算了，不影响功能 */ }
+    }
+  });
+}
+
+/* ---------- 托盘（右下角通知区） ---------- */
+function trayImage() {
+  const p = path.join(__dirname, 'build', 'icon.png');
+  let img = nativeImage.createFromPath(p);
+  if (img.isEmpty()) return nativeImage.createEmpty();
+  // 通知区图标按 16×16 显示（高 DPI 下系统会自己放大），先缩好再给，别让系统粗暴采样
+  return img.resize({ width: 16, height: 16, quality: 'best' });
+}
+
+function showWindow() {
+  if (!win) { createWindow(); return; }
+  if (win.isMinimized()) win.restore();
+  if (!win.isVisible()) win.show();
+  win.focus();
+}
+
+function toggleWindow() {
+  if (!win) { createWindow(); return; }
+  if (win.isVisible() && !win.isMinimized()) win.hide();
+  else showWindow();
+}
+
+function quitApp() {
+  quitting = true;
+  app.quit();
+}
+
+function createTray() {
+  if (tray) return tray;
+  const img = trayImage();
+  const tip = '打工人记账器 · 每一秒都算数';
+  tray = new Tray(img);
+  tray.setToolTip(tip);
+  trayMeta = {
+    icon: img.getSize(),
+    tooltip: tip,
+    menu: ['显示主界面', '缩成小窗', '退出打工人记账器']
+  };
+  tray.on('click', toggleWindow);
+  tray.on('double-click', showWindow);
+  // 右键菜单每次弹出前重建，文案能跟着窗口状态走
+  tray.on('right-click', () => {
+    const visible = !!win && win.isVisible() && !win.isMinimized();
+    tray.popUpContextMenu(Menu.buildFromTemplate([
+      { label: visible ? '隐藏到托盘' : '显示主界面', click: toggleWindow },
+      {
+        label: compacted ? '展开完整面板' : '缩成小窗',
+        click: () => {
+          showWindow();
+          if (win) win.webContents.send('tray:cmd', 'toggle-compact');
+        }
+      },
+      { type: 'separator' },
+      { label: '退出打工人记账器', click: quitApp }
+    ]));
+  });
+  tray.setContextMenu(Menu.buildFromTemplate([
+    { label: '显示主界面', click: showWindow },
+    { label: '缩成小窗', click: () => { showWindow(); if (win) win.webContents.send('tray:cmd', 'toggle-compact'); } },
+    { type: 'separator' },
+    { label: '退出打工人记账器', click: quitApp }
+  ]));
+  return tray;
 }
 
 ipcMain.handle('app:version', () => app.getVersion());
+
+// 只读状态：打包版冒烟用它确认「打包后托盘也建起来了、图标读得出来」（asar 里最容易翻车）
+ipcMain.handle('app:tray', () => ({
+  hasTray: !!tray && !tray.isDestroyed(),
+  icon: trayMeta ? trayMeta.icon : null,
+  tooltip: trayMeta ? trayMeta.tooltip : ''
+}));
 
 ipcMain.handle('holidays:fetch', (event, year) => new Promise((resolve) => {
   const url = 'https://api.jiejiariapi.com/v1/holidays/' + year;
@@ -172,24 +268,51 @@ ipcMain.on('win:compact', (event, arg) => {
 });
 
 // 只允许开一个窗口：再双击就把已有窗口拎到前面，避免两份各自计时
-if (!app.requestSingleInstanceLock()) {
+// （WB_TEST_MULTI=1 只在自动化测试里用：测试要同时起父子两个实例验证退出路径）
+if (!process.env.WB_TEST_MULTI && !app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   app.on('second-instance', () => {
-    if (!win) return;
+    // 从托盘里关着的状态下再点一次桌面图标，也要能把窗口叫出来
+    if (!win) { createWindow(); return; }
     if (win.isMinimized()) win.restore();
+    if (!win.isVisible()) win.show();
     win.show();
     win.focus();
   });
 
   app.whenReady().then(() => {
     createWindow();
+    createTray();
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow();
+      else showWindow();
     });
   });
 
+  // 退出流程：先置位，close 事件才放行（否则会被"隐藏到托盘"再拦一次）
+  app.on('before-quit', () => { quitting = true; });
+
   app.on('window-all-closed', () => {
-    app.quit();
+    // 正常情况下窗口只是 hide，这里不会触发；真被销毁且没有托盘就退出，别留个幽灵进程
+    if (quitting || !tray) app.quit();
   });
 }
+
+// 给自动化测试用的最小出口（生产环境不会被调用，也没有对外 IPC）
+module.exports.__test = {
+  getWindow: () => win,
+  getTray: () => tray,
+  trayInfo: () => trayMeta,
+  toggleWindow,
+  showWindow,
+  quitApp,
+  closeWindow: () => { if (win) win.close(); },
+  secondInstance: () => {
+    if (!win) { createWindow(); return; }
+    if (win.isMinimized()) win.restore();
+    if (!win.isVisible()) win.show();
+    win.focus();
+  },
+  isCompacted: () => compacted
+};

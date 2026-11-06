@@ -271,7 +271,14 @@ async function main() {
   record('EXE-09', '全链路无未捕获 JS 异常', pageErrors.length === 0,
     pageErrors.length ? pageErrors.slice(0, 3).join(' / ') : '无');
 
-  // 11. 打包版里的新控件
+  // 11. 托盘：打包成 asar 之后图标还读得出来吗
+  const trayInfo = await R(`window.desktop.trayState()`);
+  record('EXE-11', '打包版托盘：进程里真的建了托盘、图标从 asar 里读得出来（16×16）',
+    !!(trayInfo && trayInfo.hasTray) && trayInfo.icon && trayInfo.icon.width === 16
+      && String(trayInfo.tooltip || '').indexOf('打工人') >= 0,
+    JSON.stringify(trayInfo));
+
+  // 12. 打包版里的新控件
   record('EXE-10', '打包版新控件：6 个小时钟、5 组粉色箭头；滑块拖到 07:30 生效；金额清空后 1、2 递增',
     ui.tins === 6 && ui.spins === 5 && ui.opened === true && ui.live === '07:30'
     && ui.first === '1' && ui.second === '2' && ui.step === '1',

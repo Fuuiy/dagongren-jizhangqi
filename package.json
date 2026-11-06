@@ -1,21 +1,14 @@
 {
   "name": "dagongren-jizhangqi",
   "productName": "打工人记账器",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "打工人记账器 - 看见你每一秒赚到的钱",
   "main": "main.js",
   "author": "Fuuiy <84946630@qq.com>",
   "license": "MIT",
-  "keywords": [
-    "electron",
-    "desktop",
-    "windows",
-    "salary",
-    "time-tracking"
-  ],
   "scripts": {
     "start": "electron .",
-    "build:win": "electron-builder --win nsis --x64 --publish never",
+    "build:win": "electron-builder --win nsis --x64",
     "test": "electron test/run-p0.js && electron test/run-p1.js",
     "test:p0": "electron test/run-p0.js",
     "test:p1": "electron test/run-p1.js",
@@ -28,5 +21,12 @@
   "devDependencies": {
     "electron": "^33.2.0",
     "electron-builder": "^26.18.0"
-  }
+  },
+  "keywords": [
+    "electron",
+    "desktop",
+    "windows",
+    "salary",
+    "time-tracking"
+  ]
 }

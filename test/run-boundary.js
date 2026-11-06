@@ -592,9 +592,17 @@ async function g6_whitebox() {
     clockFrom: 'schedule', autoRun: true, doneShift: null, lastShift: null, todaySettled: null
   }));
   await sleep(250);
-  await R(`window.__setBase(2026, 11, 4, 23, 0); 'ok'`);
+  // 日期不能写死：启动那一刻是按真实时间跑的（可能已经补结过"昨晚那班"），
+  // 写死 2026-11-04 会在不同时间点跑出完全不同的结果。改成「今天 23:00」起算。
+  const d0 = new Date();
+  const y0 = d0.getFullYear(), mo0 = d0.getMonth() + 1, day0 = d0.getDate();
+  const kOf = (dd) => dd.getFullYear() + '-' + String(dd.getMonth() + 1).padStart(2, '0')
+    + '-' + String(dd.getDate()).padStart(2, '0');
+  const todayK = kOf(d0);
+  const tmrK = kOf(new Date(d0.getTime() + 24 * 3600e3));
+  await R(`window.__setBase(${y0}, ${mo0}, ${day0}, 23, 0); 'ok'`);
   await sleep(250);
-  await R(`window.__later(2 * 3600e3); 'ok'`);          // → 11-05 01:00
+  await R(`window.__later(2 * 3600e3); 'ok'`);          // → 次日 01:00
   await sleep(400);
   await openSettings();
   await R(SET('#inSalary', '16000'));
@@ -603,10 +611,11 @@ async function g6_whitebox() {
   const s28 = await R(SNAP);
   const log28 = s28.cfg.dailyLog || {};
   const keys28 = Object.keys(log28);
-  // 11-03 的 380.95 是启动时补结「昨晚那班」的合法记录；关键是本次改薪不能落到 11-05
-  record('B-28', '全自动夜班凌晨改薪：固化金额记在班次开始日（11-04），不落到次日',
-    (log28['2026-11-04'] || 0) > 0 && !log28['2026-11-05'],
-    '键=[' + keys28.join(',') + '] 值=' + keys28.map((k) => log28[k].toFixed(2)).join(','));
+  // 改薪发生在次日凌晨 01:00，但这一班是「今天 22:00」开始的，钱必须记在今天
+  record('B-28', '全自动夜班凌晨改薪：固化金额记在班次开始日（今天），不落到次日',
+    (log28[todayK] || 0) > 0 && !log28[tmrK],
+    '班次开始日=' + todayK + ' 次日=' + tmrK + ' 键=[' + keys28.join(',') + '] 值='
+    + keys28.map((k) => log28[k].toFixed(2)).join(','));
   await closeSettings();
 
   // 疑点 5（D-04 同类）：夜班凌晨补录记在班次开始日；删除后今日已赚要退回

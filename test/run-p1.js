@@ -669,20 +669,25 @@ async function t_m8_switch() {
   const before = await R(SNAP);
   await setMode('schedule', 0);
   const s = await R(SNAP);
-  // 交底口径：换模式清 doneShift/lastShift；正在计时的钱已固化后从当前时刻新开段
-  const okClean = s.cfg.doneShift == null && s.cfg.lastShift == null;
-  const okKeep = near(s.earned, before.earned, 0.2);    // 已赚保留不重算
+  // v1.1.0 起：换计时方式 = 今天的时间口径换成新的，旧口径算出的钱一律作废，
+  // 而且要等用户自己打卡（不能替他"接着上班"）
+  const okClean = s.cfg.doneShift == null && s.cfg.lastShift == null
+    && (s.cfg.segments || []).length === 0 && s.cfg.clockIn == null;
+  const okZero = s.earned < 0.01 && s.state.indexOf('工作') < 0;
+  // 重新打卡 → 点「下班」→ 按定点口径结到班次终点（交底第 5 条不变）
+  await R(CLICK('#btnClock'));
+  await sleep(300);
   await R(`window.__later(1800e3); 'ok'`);              // 10:30
   await sleep(450);
   const s2 = await R(SNAP);
-  // 切换后处于已打卡态，点「下班」→ 按定点口径结到 b.end（交底第 5 条）
   await R(CLICK('#btnClock'));
-  await sleep(450);
+  await sleep(500);
   const s3 = await R(SNAP);
   const okFull = near(s3.earned, perDay, 0.6);
-  record('TC-M8-06', '计时中切模式：收工标记清空、已赚保留；定点口径下班结到班次终点',
-    okClean && okKeep && okFull,
-    '已收工标记清空=' + okClean + ' 已赚保留=' + s.earned + '（前=' + before.earned.toFixed(3) + '）定点下班=' + s3.earned + '（≈' + perDay.toFixed(2) + '）');
+  record('TC-M8-06', '计时中切模式：旧口径金额作废归零、不替用户打卡；重新打卡后定点口径下班结到班次终点',
+    okClean && okZero && okFull,
+    '旧状态清空=' + okClean + ' 切换后已赚=' + s.earned + '（前=' + before.earned.toFixed(3) + '）状态=' + s.state
+    + ' 定点下班=' + s3.earned + '（≈' + perDay.toFixed(2) + '）');
 }
 
 /* ---------- M9 目标与明细 ---------- */
@@ -711,9 +716,12 @@ async function t_m9_goal() {
   const s2 = await R(SNAP);
   const confetti = await R(`document.querySelectorAll('.confetti').length`);
   const okHit = s2.goalPct >= 100 && s2.goalRemain.indexOf('目标达成') >= 0 && confetti === 34;
-  // 重开后不再撒花（lastGoalPct 初始为 null → 不触发）
+  // 重开后不再撒花：把「已达标」这个状态直接写进存档再重启，
+  // 不能靠"把时钟从 9 点跳到 12 点"来测 —— 那在语义上就是刚刚达成，撒花反而是对的
+  await R(`(() => { const c = JSON.parse(localStorage.getItem('${STORE}')); c.settled = 6200;
+    localStorage.setItem('${STORE}', JSON.stringify(c)); return 'ok'; })()`);
   await R(`location.reload(); 'rl'`);
-  await sleep(1200);
+  await sleep(1300);
   await R(INJECT);
   await sleep(800);
   const confetti2 = await R(`document.querySelectorAll('.confetti').length`);

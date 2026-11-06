@@ -4,7 +4,7 @@
 > 一个 424×720 的 Windows 桌面小挂件，喝口水、开个会、熬个夜，都能看见自己赚了多少。
 
 <p>
-  <img alt="version" src="https://img.shields.io/badge/version-1.0.0-FF8FA3?style=flat-square">
+  <img alt="version" src="https://img.shields.io/badge/version-1.1.0-FF8FA3?style=flat-square">
   <img alt="platform" src="https://img.shields.io/badge/platform-Windows%20x64-4C9AFF?style=flat-square">
   <img alt="electron" src="https://img.shields.io/badge/Electron-33-47848F?style=flat-square&logo=electron&logoColor=white">
   <img alt="license" src="https://img.shields.io/badge/license-MIT-97CA00?style=flat-square">
@@ -38,6 +38,7 @@
 - **忘下班提醒**：打卡超过班次 4 小时会提示「是不是忘了点下班」
 - **明细与历史**：按日、按月看，改过的记录标「补」，删除留痕可撤回
 - **小窗模式**：收成一张 424×216 的便签贴在屏幕角落，只留金额，双击横杆展开
+- **关闭到托盘**：点 × 不退出，收进右下角通知区继续计时（点图标叫回来，右键才真退出）
 - **数据 100% 本地**：存 `localStorage`，支持 JSON 导出/导入备份，连卸载都不会删你的账
 - 夜班跨零点、大小周/单休、法定节假日自动算工作日
 
@@ -111,7 +112,7 @@ export ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-b
 │   └── app.js           全部逻辑：计时、结算、校验、渲染、存档
 ├── build/icon.png       应用图标（electron-builder 自动转 ico）
 ├── electron-builder.yml 打包配置
-├── test/                14 个自动化测试套件（见下）
+├── test/                16 个自动化测试套件（见下）
 └── docs/                使用说明、需求文档、测试报告、截图
 ```
 
@@ -119,7 +120,7 @@ export ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-b
 
 ## 测试
 
-这个项目的测试不是摆设：**14 个 Electron 自动化套件、157 条断言**，全部真跑真实渲染进程（不是 mock DOM），包括真实 `execCommand` 键盘编辑、真实点击、真实安装包冒烟。
+这个项目的测试不是摆设：**16 个 Electron 自动化套件、177 条断言**，全部真跑真实渲染进程（不是 mock DOM），包括真实 `execCommand` 键盘编辑、真实点击、真实安装包冒烟。
 
 | 套件 | 覆盖 | 断言 |
 |---|---|---|
@@ -129,7 +130,9 @@ export ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-b
 | `run-inputs.js` | 输入交互：时间掩码、光标定位、滑块、数字箭头 | 19 |
 | `run-overtime.js` | 补录加班：班内/班外拆分、不封顶、防重复领 | 13 |
 | `run-window.js` | 窗口形态：小窗往返、宽度不变、几何漂移 | 12 |
-| `run-exe-smoke.js` | 打包版冒烟：首启 → 打卡 → 持久化 → 单实例 | 10 |
+| `run-exe-smoke.js` | 打包版冒烟：首启 → 打卡 → 持久化 → 单实例 → 托盘 | 11 |
+| `run-mode-reset.js` | 切换计时方式：金额归零、不替你打卡、补录保留 | 12 |
+| `run-tray.js` | 托盘：点 × 只隐藏、图标开关、退出路径 | 7 |
 | `run-network.js` | 网络异常：节假日接口超时/500/坏 JSON 降级 | 9 |
 | `run-compat.js` | 兼容：缩放、DPI、极端分辨率 | 8 |
 | `run-v111.js` | 新控件：时间滑块、粉色数字箭头 | 8 |
@@ -157,6 +160,14 @@ WB_EXE_PATH="C:/Users/you/AppData/Local/Programs/打工人记账器/打工人记
 
 **Q：换电脑数据怎么搬？**
 设置 → 数据备份 → 导出数据，得到 JSON；新电脑点导入。
+
+**Q：点了 × 程序怎么不见了？**
+
+它是收到 Windows 右下角通知区（托盘）了，计时一秒没停。点那个小图标就能叫回来；右键图标 → 退出打工人记账器 才是真退出。找不到图标就点一下任务栏的 `^`。
+
+**Q：我切了计时方式，今天的钱怎么变 0 了？**
+
+三种方式算钱口径不同（打卡按实际时长、全自动按班次），混着算会算错，所以**切完就从 0 重新开始**，而且要你自己点打卡——程序不会替你上班。手动「补录」的钱不受影响。只改工资、上班时间不会清零。
 
 **Q：为什么每秒进账显示 4 位小数？**
 月薪 12000、21 个工作日时，秒薪约 0.0198 元。四位小数才看得出它在动。
