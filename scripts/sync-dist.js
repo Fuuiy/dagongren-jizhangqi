@@ -66,13 +66,27 @@ const sizeOf = (dir) => {
 
 // 逐文件复制：不用 fs.cpSync / fs.rmSync 的递归模式，
 // 一是某些运行环境会拦递归删/复制，二是目录被资源管理器占着时整棵树删不动
+// 目标目录里的 exe 可能正开着（资源被占用会 EBUSY），重试几次再放弃，
+// 别让整个同步因为一个 .pak 文件半途中断
+function copyFileRetry(from, to, tries) {
+  const n = tries || 6;
+  for (let i = 0; i < n; i++) {
+    try { fs.copyFileSync(from, to); return; }
+    catch (e) {
+      if (i === n - 1) throw e;
+      const until = Date.now() + 250;
+      while (Date.now() < until) { /* 忙等一小会儿，同步脚本本来就是阻塞执行的 */ }
+    }
+  }
+}
+
 function copyTree(src, dst) {
   fs.mkdirSync(dst, { recursive: true });
   for (const e of fs.readdirSync(src, { withFileTypes: true })) {
     const s = path.join(src, e.name);
     const d = path.join(dst, e.name);
     if (e.isDirectory()) copyTree(s, d);
-    else fs.copyFileSync(s, d);
+    else copyFileRetry(s, d);
   }
 }
 

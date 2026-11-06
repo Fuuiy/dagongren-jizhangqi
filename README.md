@@ -4,7 +4,7 @@
 > 一个 424×720 的 Windows 桌面小挂件，喝口水、开个会、熬个夜，都能看见自己赚了多少。
 
 <p>
-  <img alt="version" src="https://img.shields.io/badge/version-1.2.4-FF8FA3?style=flat-square">
+  <img alt="version" src="https://img.shields.io/badge/version-1.2.5-FF8FA3?style=flat-square">
   <img alt="platform" src="https://img.shields.io/badge/platform-Windows%20x64-4C9AFF?style=flat-square">
   <img alt="electron" src="https://img.shields.io/badge/Electron-33-47848F?style=flat-square&logo=electron&logoColor=white">
   <img alt="license" src="https://img.shields.io/badge/license-MIT-97CA00?style=flat-square">

@@ -166,9 +166,15 @@ async function main() {
   await R(`window.__at(9); document.querySelector('#btnClock').click(); 'ok'`);
   await sleep(400);
   await R(`window.__later(3 * 3600e3); 'ok'`);
-  await sleep(500);
-  const s2 = await R(SNAP);
+  // 金额刷新是逐帧的，固定 sleep 在机器忙时会读到刚打卡那几秒（曾偶发成 0.003）
+  // 轮询到金额真的涨起来再判定
   const e3 = perDay * 3 / 8;
+  let s2 = null;
+  for (let i = 0; i < 20; i++) {
+    await sleep(200);
+    s2 = await R(SNAP);
+    if (s2.earned > e3 * 0.6) break;
+  }
   await R(`document.querySelector('#btnBreak').click(); 'ok'`);
   await sleep(400);
   const s3 = await R(SNAP);

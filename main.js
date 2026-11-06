@@ -25,7 +25,7 @@ let closeToTray = true;
 let normalBox = { width: geo.NORMAL.width, height: geo.NORMAL.height };
 
 // 任务栏图标与分组标识
-app.setAppUserModelId('com.workbuddy.dagongren.jizhangqi');
+app.setAppUserModelId('com.fuuiy.dagongren.jizhangqi');
 
 function workAreaOf(box) {
   try { return screen.getDisplayMatching(box).workArea; } catch (e) { return null; }

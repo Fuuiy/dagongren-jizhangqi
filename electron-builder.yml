@@ -1,9 +1,9 @@
 # electron-builder 配置（独立文件，不动 package.json）
 # 产物：release/打工人记账器-<版本>-安装包.exe（NSIS，可选安装目录、有开始菜单/桌面图标、可卸载）
 
-appId: com.workbuddy.dagongren.jizhangqi
+appId: com.fuuiy.dagongren.jizhangqi
 productName: 打工人记账器
-copyright: Copyright © 2026 打工人记账器
+copyright: Copyright © 2026 Fuuiy
 
 directories:
   output: release
@@ -49,3 +49,7 @@ nsis:
     - zh_CN
   language: "2052"
   license: null
+
+# 免安装版（绿色版）：单个 exe，双击就跑，不写注册表、不进 Program Files
+portable:
+  artifactName: 打工人记账器-${version}-绿色版.${ext}
