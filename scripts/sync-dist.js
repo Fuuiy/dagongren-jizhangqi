@@ -35,9 +35,18 @@ for (const f of KEEP) {
   const p = path.join(DST, f);
   if (fs.existsSync(p)) {
     kept[f] = fs.readFileSync(p);
-    const m = kept[f].toString('utf8').match(/v(\d+\.\d+\.\d+)/);
-    if (m && m[1] !== pkg.version) {
-      console.warn('[sync-dist] 注意：' + f + ' 里写的是 v' + m[1] + '，当前是 v' + pkg.version);
+    const all = kept[f].toString('utf8').match(/v\d+\.\d+\.\d+/g) || [];
+    const nums = all.map((x) => x.slice(1).split('.').map(Number));
+    let hi = null;
+    for (const n of nums) {
+      if (!hi || n[0] > hi[0] || (n[0] === hi[0] && n[1] > hi[1])
+        || (n[0] === hi[0] && n[1] === hi[1] && n[2] > hi[2])) hi = n;
+    }
+    if (hi) {
+      const hv = hi.join('.');
+      if (hv !== pkg.version) {
+        console.log('[sync-dist] ' + f + ' 将从 v' + hv + ' 更新为 v' + pkg.version);
+      }
     }
   }
 }
@@ -86,8 +95,13 @@ for (const name of stale) {
   }
 }
 
+// 说明文件：源里有就用源里的（才是最新版），源里没有才回退到备份
 for (const f of KEEP) {
-  if (kept[f]) fs.writeFileSync(path.join(DST, f), kept[f]);
+  const dp = path.join(DST, f);
+  if (!fs.existsSync(dp) && kept[f]) {
+    fs.writeFileSync(dp, kept[f]);
+    console.log('[sync-dist] ' + f + ' 源里没有，用旧版补回');
+  }
 }
 
 // 「第一次用先看这里.txt」里写的是发布包名（打工人记账器-x.y.z-免安装版），

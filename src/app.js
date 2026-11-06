@@ -496,6 +496,41 @@
     const now = Date.now();
     const b = shiftAt(now);
     const auto = cfg.clockFrom === 'schedule' && !!cfg.autoRun;
+
+    // 老补录记录：from/to 存的是「用户输入的整段」，但全自动/定点只对班外那截计薪
+    // （填 09:00–18:00、班次 09:00–17:00 时，实际只给 17:00–18:00 的钱）。
+    // 补上 parts，否则列表会写成「09:00–18:00（1 小时）」，还会把后面想补的时段错判成重叠。
+    if (Array.isArray(cfg.fixRanges) && cfg.fixRanges.length) {
+      let touched = false;
+      for (const fr of cfg.fixRanges) {
+        if (Array.isArray(fr.parts) && fr.parts.length) continue;
+        if (typeof fr.from !== 'number' || typeof fr.to !== 'number'
+          || typeof fr.sec !== 'number') continue;
+        const span = (fr.to - fr.from) / 1000;
+        // 跨度没比计薪秒数大多少 → 就是整段（含跨午休的正常偏差）
+        if (span <= fr.sec + 120) {
+          fr.parts = [{ from: fr.from, to: fr.to }];
+          touched = true;
+          continue;
+        }
+        // 班内也有计薪（打卡那一刻）：整段都算钱，只是午休被扣掉了时长
+        if (typeof fr.inSec === 'number' && fr.inSec > 0) {
+          fr.parts = [{ from: fr.from, to: fr.to }];
+          touched = true;
+          continue;
+        }
+        const ps = [];
+        if (fr.to <= b.start || fr.from >= b.end) ps.push({ from: fr.from, to: fr.to });
+        else {
+          if (fr.from < b.start) ps.push({ from: fr.from, to: b.start });
+          if (fr.to > b.end) ps.push({ from: b.end, to: fr.to });
+        }
+        fr.parts = ps.length ? ps : [{ from: fr.from, to: fr.to }];
+        touched = true;
+      }
+      if (touched) save();
+    }
+
     if (!auto) return;
     if (now < b.end && (cfg.doneShift != null || (cfg.lastShift && cfg.lastShift.start === b.start))) {
       cfg.doneShift = null;
@@ -2242,9 +2277,14 @@
     // 会重复算钱的三种情况：已补过的 / 正在计时的 / 请假的
     const k = dayKey(b.start);
     const ranges = cfg.fixDay === k ? cfg.fixRanges : [];
-    const hit = ranges.find((fr) => Math.min(to, fr.to) > Math.max(from, fr.from));
+    const hit = ranges.find((fr) => fixPartsOf(fr)
+      .some((p) => Math.min(to, p.to) > Math.max(from, p.from)));
     if (hit) {
-      return bad('和已经补过的 ' + hhmm(hit.from) + '–' + hhmm(hit.to) + ' 重叠了，换一段没补过的', '#inFixStart');
+      // 只报真正撞上的那几段：一次补了「班前+班后」两条时，别把没关系的也列出来
+      const hs = fixPartsOf(hit)
+        .filter((p) => Math.min(to, p.to) > Math.max(from, p.from))
+        .map((p) => hhmm(p.from) + '–' + hhmm(p.to)).join('、');
+      return bad('和已经补过的 ' + (hs || '那一段') + ' 重叠了，换一段没补过的', '#inFixStart');
     }
     // 定点打卡/全自动下只补班外，和正在跑的打卡段重叠也无所谓（班内本来就不补）
     if (cfg.clockFrom === 'click') {
@@ -2257,7 +2297,20 @@
     if (lv) {
       return bad('这段时间你请了假（' + hhmm(lv.from) + ' 起），请假不计薪，补进去也不会加钱', '#inFixStart');
     }
-    return { from, to, sec, inSec, outSec };
+
+    // 真正会入账的时间段：全自动/定点只算班外那截，打卡那一刻整段都算。
+    // 列表显示、重叠判定、写入记录全用这一份，免得三处各算一套对不上
+    const parts = [];
+    if (cfg.clockFrom === 'schedule') {
+      if (to <= b.start || from >= b.end) parts.push({ from: from, to: to });
+      else {
+        if (from < b.start) parts.push({ from: from, to: b.start });
+        if (to > b.end) parts.push({ from: b.end, to: to });
+      }
+    } else {
+      parts.push({ from: from, to: to });
+    }
+    return { from, to, sec, inSec, outSec, parts };
   }
 
   function updateFixHint() {
@@ -2282,7 +2335,15 @@
     } else if (r.outSec >= 60) {
       mark = ' · 班外加班';
     }
-    el.textContent = '这段 ' + fixWhen(r.from, r.to) + '（' + dur + mark + '），可补 ' + fmtMoney(money, 2);
+    // 全自动/定点：用户填的范围可能大部分是班内（已整段算过钱），
+    // 直接告诉他「实际入账的是这一段」，别只写总区间让人以为 9 小时都给了钱
+    const realSpans = (r.parts || []).map((p) => hhmm(p.from) + '–' + hhmm(p.to)).join('、');
+    const nPart = (r.parts || []).length;
+    const partial = cfg.clockFrom === 'schedule' && realSpans
+      && (nPart > 1 || (r.parts[0].from !== r.from || r.parts[0].to !== r.to));
+    const which = partial ? ('只补 ' + realSpans + (nPart > 1 ? ' 这 ' + nPart + ' 段' : ' 这一段'))
+      : ('这段 ' + fixWhen(r.from, r.to));
+    el.textContent = which + '（' + dur + mark + '），可补 ' + fmtMoney(money, 2);
     el.classList.remove('warn');
   }
 
@@ -2296,7 +2357,8 @@
 
     // 默认别落在已经补过 / 正在计时的区间上：从上班时间起找第一个空闲的 1 小时
     const ranges = cfg.fixDay === dayKey(now) ? cfg.fixRanges : [];
-    const busy = (a, z) => ranges.some((fr) => Math.min(z, fr.to) > Math.max(a, fr.from))
+    const busy = (a, z) => ranges.some((fr) => fixPartsOf(fr)
+      .some((p) => Math.min(z, p.to) > Math.max(a, p.from)))
       || segs().some((sg) => Math.min(z, sg.to == null ? now : sg.to) > Math.max(a, sg.from));
     let a;
     let z;
@@ -2360,6 +2422,16 @@
     if (ab) ab.hidden = true;
   }
 
+  // 一条补录实际占了哪些时间段。
+  // 老数据没有 parts：from/to 就是那段（可能比真正计薪的区间大，见 repairState 的迁移）
+  function fixPartsOf(fr) {
+    if (fr && Array.isArray(fr.parts) && fr.parts.length) return fr.parts;
+    if (fr && typeof fr.from === 'number' && typeof fr.to === 'number') {
+      return [{ from: fr.from, to: fr.to }];
+    }
+    return [];
+  }
+
   // 打开弹层时把「今天已补的段」列出来，避免补重
   function renderFixList() {
     const box = $('#fixList');
@@ -2378,8 +2450,9 @@
       sum += amt;
       const dur = typeof fr.sec === 'number' ? fmtDuration(Math.round(fr.sec / 60)) : '';
       const ot = typeof fr.otSec === 'number' && fr.otSec >= 60;
+      const spans = fixPartsOf(fr).map((p) => hhmm(p.from) + '–' + hhmm(p.to)).join('、');
       return '<div class="fix-item">'
-        + '<span class="fi-when">' + hhmm(fr.from) + ' – ' + hhmm(fr.to)
+        + '<span class="fi-when">' + (spans || hhmm(fr.from) + ' – ' + hhmm(fr.to))
         + (dur ? '<span class="fi-tag">' + dur + '</span>' : '')
         + (ot ? '<span class="fi-tag ot">加班</span>' : '')
         + '</span>'
@@ -2443,6 +2516,7 @@
       return;
     }
     const c = calc();
+    const b = shiftAt(Date.now());
     // 补录 = 加班：班内按 1 倍、班外按用户设的倍率，都不被「今天已满」砍掉
     const rate = cfg.otRate || 1;
     const amount = r.inSec * c.perSec + r.outSec * c.perSec * rate;
@@ -2459,8 +2533,12 @@
     const k = dayKey(shiftAt(Date.now()).start);
     cfg.dailyLog[k] = (cfg.dailyLog[k] || 0) + amount;
     cfg.fixDay = k;
+    // parts 来自 fixCheck：真正会入账的时段（全自动/定点只有班外那截）。
+    // 只存用户输入的整段会让列表写成「09:00–18:00（1 小时）」，还会挡住后面想补的时段
     cfg.fixRanges.push({
-      from: r.from, to: r.to, sec: r.sec, amount: amount,
+      from: r.from, to: r.to,
+      parts: (r.parts && r.parts.length) ? r.parts : [{ from: r.from, to: r.to }],
+      sec: r.sec, amount: amount,
       inSec: r.inSec, otSec: r.outSec, at: Date.now()
     });
     // 已经收工的班次记录也跟着涨，否则第二天显示的还是补录前的数
