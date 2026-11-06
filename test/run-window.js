@@ -273,6 +273,34 @@ async function runAll() {
 
   await compactOff();
   await sleep(500);
+
+  /* W-13 小屏尺寸规则：工作区不够高时只压高度、不留出屏幕 */
+  const big = geo.normalBounds({ width: 1920, height: 1019 });
+  const small = geo.normalBounds({ width: 1366, height: 582 });
+  record('W-13', '窗口尺寸规则：大屏按设计 424×720；小屏（1366×768@125%）自动压到工作区内',
+    big.width === 424 && big.height === 720 && small.width === 424 && small.height === 574
+      && small.height <= 582 - 4,
+    '大屏=' + big.width + '×' + big.height + ' 小屏=' + small.width + '×' + small.height
+    + '（工作区 582，留 8px 余量）');
+
+  /* W-14 真按小屏高度开一次：首页塞得下、打卡按钮不被裁 */
+  win.setBounds({ x: win.getBounds().x, y: win.getBounds().y, width: 424, height: 574 });
+  await sleep(800);
+  const s14 = await R(`(() => {
+    const q = (s) => document.querySelector(s);
+    const b = (s) => { const e = q(s); if (!e) return null; const r = e.getBoundingClientRect(); return { t: Math.round(r.top), b: Math.round(r.bottom), h: Math.round(r.height) }; };
+    const sc = q('.scroll');
+    return { iw: innerWidth, ih: innerHeight, clock: b('#btnClock'), dock: b('#dock'),
+      quote: b('.quote'), over: sc.scrollHeight - sc.clientHeight, tight: document.body.classList.contains('tight') };
+  })()`);
+  record('W-14', '按小屏高度 574 开窗：打卡按钮完整在窗内、首页无滚动条（放不下时先收吐槽那一行）',
+    s14.clock && s14.clock.b <= s14.ih + 1 && s14.dock && s14.dock.b <= s14.ih + 1 && s14.over <= 0,
+    '窗高=' + s14.ih + ' 打卡底=' + (s14.clock ? s14.clock.b : '?') + ' 横杆底=' + (s14.dock ? s14.dock.b : '?')
+    + ' 溢出=' + s14.over + ' 收紧了=' + s14.tight);
+
+  // 还原到设计尺寸，后面的用例继续用
+  win.setBounds({ x: win.getBounds().x, y: win.getBounds().y, width: geo.NORMAL.width, height: geo.NORMAL.height });
+  await sleep(600);
 }
 
 app.whenReady().then(async () => {

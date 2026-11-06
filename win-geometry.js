@@ -45,6 +45,17 @@ function expandBounds(box, normal, area) {
   return { x: clampX(box, width, area), y: fitY(box, height, area), width, height };
 }
 
+// 正常态的初始尺寸：设计值 424×720，但绝不超出工作区（小屏/高缩放下放不下就矮一点）
+function normalBounds(area) {
+  const width = NORMAL.width;
+  let height = NORMAL.height;
+  if (area && area.height) {
+    // 留 8px 余量，别贴着任务栏/屏幕边
+    height = Math.min(NORMAL.height, Math.max(480, Math.round(area.height - 8)));
+  }
+  return { width, height };
+}
+
 function sameBounds(a, b) {
   if (!a || !b) return false;
   return a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
@@ -56,6 +67,7 @@ module.exports = {
   COMPACT_MIN_HEIGHT,
   compactBounds,
   expandBounds,
+  normalBounds,
   clampX,
   fitY,
   sameBounds

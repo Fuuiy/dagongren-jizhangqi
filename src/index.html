@@ -47,6 +47,11 @@
 
   <main class="scroll">
 
+    <!-- 用了默认值没确认时，首页一直挂一条可点的提示 -->
+    <button class="def-bar" id="defBar" hidden>
+      <span>现在用的是默认工资 <b id="defSalary">¥8,000</b>，点这里改成你的 →</span>
+    </button>
+
     <!-- 核心：今日已赚（实时滚动）+ 每秒进账 -->
     <section class="card hero" id="hero">
       <div class="hero-head">
@@ -116,7 +121,10 @@
       <p class="goal-parts" id="goalParts">已有 ¥0 + 今日 ¥0.00</p>
       <div class="goal-parts month month-row">
         <span id="goalMonth">本月已赚 ¥0 · 0 天</span>
-        <button class="ghost mini" id="btnHistory">明细</button>
+        <span class="month-btns">
+          <button class="ghost mini" id="btnNextGoal" hidden>换下一个目标</button>
+          <button class="ghost mini" id="btnHistory">明细</button>
+        </span>
       </div>
     </section>
 
@@ -174,7 +182,7 @@
 
   <!-- 底部横杆：正常态点它缩小，迷你态点它展开（两种态都在，位置不跳） -->
   <footer class="dock" id="dock">
-    <span class="dock-ver" id="foot">每一秒都算数 ♡ <span class="ver" id="ver">v1.1.0</span></span>
+    <span class="dock-ver" id="foot">每一秒都算数 ♡ <span class="ver" id="ver">v1.2.0</span></span>
     <button class="compact-bar" id="compactBar" type="button" title="缩成小窗" aria-label="缩成小窗">
       <span class="cb-grip"></span>
     </button>
@@ -300,6 +308,7 @@
         <span class="f-note" id="salaryEcho"></span>
       </div>
       <input type="number" id="inSalary" min="0" step="100" inputmode="decimal" />
+      <p class="f-hint f-hint-warn" id="salaryHint" hidden>现在填的是默认值 8,000，请改成你自己到卡里的数</p>
     </div>
 
     <div class="field">
@@ -370,6 +379,19 @@
       <p class="f-hint" id="modeHint"></p>
     </div>
 
+    <div class="field">
+      <div class="f-line">
+        <span class="f-label">加班费倍率</span>
+        <span class="f-note" id="otRateNote">1 倍</span>
+      </div>
+      <div class="seg" id="segOt">
+        <button type="button" data-ot="1">1 倍</button>
+        <button type="button" data-ot="1.5">1.5 倍</button>
+        <button type="button" data-ot="2">2 倍</button>
+      </div>
+      <p class="f-hint">只影响「补录」的班外加班；日薪内的正常工时永远按 1 倍算</p>
+    </div>
+
     <div class="divider"></div>
 
     <details class="grp" id="goalGroup">
@@ -398,13 +420,26 @@
     </details>
 
     <div class="field">
+      <span class="f-label">点窗口右上角 × 时</span>
+      <div class="seg" id="segClose">
+        <button type="button" data-close="tray">收到右下角继续计时</button>
+        <button type="button" data-close="quit">直接退出</button>
+      </div>
+      <p class="f-hint">收到右下角后，点托盘图标能叫回来；右键图标可真正退出</p>
+    </div>
+
+    <div class="field">
       <span class="f-label">数据备份</span>
       <div class="row">
         <button class="btn-reset data-btn" id="btnExport">导出数据</button>
         <button class="btn-reset data-btn" id="btnImport">导入数据</button>
       </div>
       <p class="f-hint" id="dataHint">导出成 .json 备份；导入会覆盖当前所有数据，导入前自动留一份备份</p>
-      <button class="link-mini" id="btnFirstRun">回到首次使用（清空全部数据）</button>
+      <p class="f-hint data-path" id="dataPath">数据就存在这台电脑上（点下面复制路径）</p>
+      <div class="row">
+        <button class="link-mini" id="btnCopyPath">复制数据路径</button>
+        <button class="link-mini" id="btnFirstRun">回到首次使用（清空全部数据）</button>
+      </div>
     </div>
 
     <details class="calc-note">
@@ -428,6 +463,21 @@
     <button class="btn-save" id="btnSave">存好啦 ♪</button>
   </div>
 </div>
+<!-- 轻提示（保存成功之类，1.5 秒自己消失） -->
+<div class="toast" id="toast" hidden></div>
+
+<!-- 通用确认弹层：首启没填参数、切计时方式会清零，都走这里 -->
+<div class="dlg-mask" id="dlgMask" hidden>
+  <div class="dlg" role="dialog" aria-modal="true" aria-labelledby="dlgTitle">
+    <p class="dlg-title" id="dlgTitle">提示</p>
+    <p class="dlg-text" id="dlgText"></p>
+    <div class="dlg-actions">
+      <button class="btn-reset" id="dlgCancel">取消</button>
+      <button class="btn-save" id="dlgOk">确定</button>
+    </div>
+  </div>
+</div>
+
 <script src="app.js"></script>
 </body>
 </html>

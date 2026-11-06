@@ -12,7 +12,7 @@
  *   T6 托盘的「退出」才是真退出；关闭窗口不会杀进程（子进程验证）
  *   T7 收到托盘后计时没断：隐藏期间渲染进程仍在、存档仍在写
  */
-const { app } = require('electron');
+const { app, screen } = require('electron');
 const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
@@ -53,8 +53,12 @@ async function main() {
   /* T1 托盘已创建 */
   const meta = (T.trayInfo && T.trayInfo()) || {};
   const iconSize = meta.icon || { width: 0, height: 0 };
-  record('T1', '启动后右下角有托盘图标（16×16、带提示文字、右键菜单 3 项）',
-    !!tray && !tray.isDestroyed() && iconSize.width === 16 && iconSize.height === 16
+  // v1.2.0 起按屏幕缩放取尺寸：100%/150%/200% → 16/24/32px（避免系统放大发虚）
+  let scale = 1;
+  try { scale = screen.getPrimaryDisplay().scaleFactor || 1; } catch (e) { scale = 1; }
+  const wantPx = Math.max(16, Math.round(16 * scale));
+  record('T1', '启动后右下角有托盘图标（按缩放取 ' + wantPx + 'px、带提示文字、右键菜单 3 项）',
+    !!tray && !tray.isDestroyed() && iconSize.width === wantPx && iconSize.height === wantPx
       && String(meta.tooltip || '').indexOf('打工人') >= 0 && (meta.menu || []).length === 3,
     'icon=' + iconSize.width + 'x' + iconSize.height + ' tooltip=' + meta.tooltip
       + ' 菜单=' + JSON.stringify(meta.menu));

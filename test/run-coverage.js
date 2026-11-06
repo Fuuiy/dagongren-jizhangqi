@@ -555,11 +555,66 @@ app.whenReady().then(async () => {
   await dbg.sendCommand('Profiler.enable');
   await dbg.sendCommand('Profiler.startPreciseCoverage', { callCount: true, detailed: true });
 
+/* v1.2.0 新增路径：首启闸门 / 默认值黄条 / 加班倍率 / 点×开关 / 复制路径 / 换目标 / 快捷键 */
+async function flow3() {
+  await R(`(() => { const c = JSON.parse(localStorage.getItem('${STORE}') || '{}');
+    c.inited = false; c.confirmedByUser = false; c.clockFrom = 'click'; c.autoRun = false;
+    localStorage.setItem('${STORE}', JSON.stringify(c)); location.reload(); return 'ok'; })()`);
+  await sleep(1500);
+  await R(`document.querySelector('#btnCloseSheet').click(); 'ok'`);      // 首启收起 → 弹确认
+  await sleep(350);
+  await R(`document.querySelector('#dlgCancel').click(); 'ok'`);          // 取消分支
+  await sleep(250);
+  await R(`document.querySelector('#btnCloseSheet').click(); 'ok'`);
+  await sleep(350);
+  await R(`document.querySelector('#dlgOk').click(); 'ok'`);              // 用默认值分支
+  await sleep(700);
+  await R(`document.querySelector('#defBar').click(); 'ok'`);             // 黄条 → 回设置
+  await sleep(600);
+  await R(`document.querySelector('#segOt button[data-ot="2"]').click(); 'ok'`);     // 倍率 2 倍
+  await sleep(300);
+  await R(`document.querySelector('#segClose button[data-close="quit"]').click(); 'ok'`);
+  await sleep(300);
+  await R(`document.querySelector('#segClose button[data-close="tray"]').click(); 'ok'`);
+  await sleep(300);
+  await R(`document.querySelector('#btnCopyPath').click(); 'ok'`);
+  await sleep(300);
+  await R(`document.querySelector('#btnSave').click(); 'ok'`);
+  await sleep(600);
+  if (await R(`!document.querySelector('#dlgMask').hidden`)) {
+    await R(`document.querySelector('#dlgOk').click(); 'ok'`);
+    await sleep(500);
+  }
+  // 目标达成 → 「换下一个目标」
+  await R(`(() => { const c = JSON.parse(localStorage.getItem('${STORE}') || '{}');
+    c.settled = 9000; c.confirmedByUser = true; localStorage.setItem('${STORE}', JSON.stringify(c));
+    location.reload(); return 'ok'; })()`);
+  await sleep(1500);
+  await R(`document.querySelector('#btnNextGoal').click(); 'ok'`);
+  await sleep(700);
+  await R(`document.querySelector('#btnCloseSheet').click(); 'ok'`);
+  await sleep(400);
+  if (await R(`!document.querySelector('#dlgMask').hidden`)) {
+    await R(`document.querySelector('#dlgCancel').click(); 'ok'`);
+    await sleep(300);
+  }
+  // 快捷键：打卡 / 午休 / Esc / 下班
+  await R(`document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true, bubbles: true })); 'ok'`);
+  await sleep(700);
+  await R(`document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'b', ctrlKey: true, bubbles: true })); 'ok'`);
+  await sleep(500);
+  await R(`document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); 'ok'`);
+  await sleep(300);
+  await R(`document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true, bubbles: true })); 'ok'`);
+  await sleep(600);
+}
+
   let fatal = null;
   try {
     await inject();
     await flow();
     await flow2();
+    await flow3();
   } catch (e) {
     fatal = e;
     console.log('FATAL | ' + ((e && e.stack) || e));

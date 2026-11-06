@@ -273,8 +273,9 @@ async function main() {
 
   // 11. 托盘：打包成 asar 之后图标还读得出来吗
   const trayInfo = await R(`window.desktop.trayState()`);
-  record('EXE-11', '打包版托盘：进程里真的建了托盘、图标从 asar 里读得出来（16×16）',
-    !!(trayInfo && trayInfo.hasTray) && trayInfo.icon && trayInfo.icon.width === 16
+  record('EXE-11', '打包版托盘：进程里真的建了托盘、图标从 asar 里读得出来（按缩放 16/24/32px）',
+    !!(trayInfo && trayInfo.hasTray) && trayInfo.icon
+      && [16, 24, 32].indexOf(trayInfo.icon.width) >= 0 && trayInfo.icon.width === trayInfo.icon.height
       && String(trayInfo.tooltip || '').indexOf('打工人') >= 0,
     JSON.stringify(trayInfo));
 

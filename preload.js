@@ -8,6 +8,9 @@ contextBridge.exposeInMainWorld('desktop', {
   fetchHolidays: (y) => ipcRenderer.invoke('holidays:fetch', y),
   getVersion: () => ipcRenderer.invoke('app:version'),
   trayState: () => ipcRenderer.invoke('app:tray'),
+  setCloseToTray: (v) => ipcRenderer.send('win:close-behavior', !!v),
+  dataPath: () => ipcRenderer.invoke('app:data-path'),
+  copyText: (t) => ipcRenderer.send('app:copy', String(t || '')),
   exportData: (name, content) => ipcRenderer.invoke('data:export', name, content),
   importData: () => ipcRenderer.invoke('data:import'),
   // 托盘右键菜单发来的指令（目前只有「缩成小窗 / 展开」）

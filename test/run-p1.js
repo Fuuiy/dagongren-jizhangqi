@@ -98,7 +98,15 @@ async function openSettings() {
   await R(`if (!document.querySelector('#sheet').classList.contains('on')) document.querySelector('#btnSettings').click(); 'ok'`);
   await sleep(200);
 }
-async function saveSettings() { await R(CLICK('#btnSave')); await sleep(350); }
+async function saveSettings() {
+  await R(CLICK('#btnSave'));
+  await sleep(320);
+  // v1.2.0 起：切计时方式且当天已赚 > 0 会先弹确认，测试里一律选「确定切换」
+  if (await R(`!document.querySelector('#dlgMask').hidden`)) {
+    await R(CLICK('#dlgOk'));
+    await sleep(450);
+  }
+}
 
 async function reset() {
   const fixtureJson = JSON.stringify(JSON.stringify(FIXTURE));
@@ -627,8 +635,11 @@ async function t_m7_cards() {
   const okDay = near(s.perDayCard, perDay, 0.05);
   const okHour = near(s.perHour, perDay / 8, 0.05);
   const okMin = near(s.perMin, perDay / 480, 0.01);
-  const okSec = near(s.perSecCard, perDay / 28800, 0.0005);
-  record('TC-M7-04/05', '干满全天已赚=日薪卡片；时/分/秒薪与公式一致', okCap && okDay && okHour && okMin && okSec,
+  // v1.2.0：秒薪主卡改成 2 位小数（0.0198 读不出感觉），精确值放进 title
+  const secTitle = await R(`document.querySelector('#perSecCard').getAttribute('title') || ''`);
+  const titleVal = parseFloat(String(secTitle).replace(/[^0-9.]/g, '')) || 0;
+  const okSec = near(s.perSecCard, perDay / 28800, 0.006) && near(titleVal, perDay / 28800, 0.0005);
+  record('TC-M7-04/05', '干满全天已赚=日薪卡片；时/分/秒薪与公式一致（秒薪卡 2 位、title 记 4 位精确值）', okCap && okDay && okHour && okMin && okSec,
     '已赚=' + s.earned + ' 日薪卡=' + s.perDayCard + ' 时薪=' + s.perHour + ' 分薪=' + s.perMin + ' 秒薪=' + s.perSecCard);
 }
 

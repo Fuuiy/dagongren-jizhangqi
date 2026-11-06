@@ -103,11 +103,20 @@ async function setMode(kind) {
 // 保存：遇到「防误操作」二次确认时再点一次
 async function save() {
   await R(CLICK('#btnSave'));
-  await sleep(500);
+  await sleep(420);
+  // v1.2.0：切计时方式会先问「今天这笔钱要清零，确定吗」——测试里一律确认
+  if (await R(`!document.querySelector('#dlgMask').hidden`)) {
+    await R(CLICK('#dlgOk'));
+    await sleep(520);
+  }
   const stillOn = await R(`document.querySelector('#sheet').classList.contains('on')`);
   if (stillOn) {
     await R(CLICK('#btnSave'));
     await sleep(600);
+    if (await R(`!document.querySelector('#dlgMask').hidden`)) {
+      await R(CLICK('#dlgOk'));
+      await sleep(500);
+    }
   }
 }
 // 首启填参数（默认 09:00-18:00 午休 12:00-13:00）

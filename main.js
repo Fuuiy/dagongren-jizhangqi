@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, screen, Tray, Menu, nativeImage } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, screen, Tray, Menu, nativeImage, clipboard } = require('electron');
 const fs = require('fs');
 const https = require('https');
 const path = require('path');
@@ -18,6 +18,8 @@ let compacted = false;
 // 真正要退出时才置 true。不置的话「关窗口」只会收到托盘里，不会杀进程
 let quitting = false;
 let trayHinted = false;
+// 点 × 时：true = 收进托盘继续计时（默认），false = 直接退出（用户在设置里选的）
+let closeToTray = true;
 // 记住「缩小前」的整份几何（宽 + 高）。只记高度不够：
 // 迷你窗被拉宽过，展开时就会一直占满屏 —— 这正是 v1.9.0 的毛病。
 let normalBox = { width: geo.NORMAL.width, height: geo.NORMAL.height };
@@ -30,11 +32,15 @@ function workAreaOf(box) {
 }
 
 function createWindow() {
+  // 设计尺寸 424×720；小屏笔记本（1366×768@125% 工作区只有 ~582px）放不下就矮一点，
+  // 版面靠已有的紧凑断点 + fitGuard 收，不会把打卡按钮挤到屏幕外面
+  let size = { width: geo.NORMAL.width, height: geo.NORMAL.height };
+  try { size = geo.normalBounds(screen.getPrimaryDisplay().workArea); } catch (e) { /* 拿不到就用设计尺寸 */ }
   win = new BrowserWindow({
-    width: geo.NORMAL.width,
-    height: geo.NORMAL.height,
-    minWidth: geo.NORMAL_MIN.width,
-    minHeight: geo.NORMAL_MIN.height,
+    width: size.width,
+    height: size.height,
+    minWidth: Math.min(geo.NORMAL_MIN.width, size.width),
+    minHeight: Math.min(geo.NORMAL_MIN.height, size.height),
     frame: false,
     // 桌面小工具：大小只有两种形态（正常 / 迷你），都由底部横杆切换。
     // 允许用户拖边改尺寸的话，首页内容就会被裁掉或需要滚动 —— 都不是桌面程序该有的样子。
@@ -81,6 +87,10 @@ function createWindow() {
   // 真要退出走托盘右键菜单「退出」，或 app.quit()（quitting 置位后才真关）
   win.on('close', (e) => {
     if (quitting) return;
+    if (!closeToTray) {          // 用户选了「直接退出」：放行，交给 before-quit 收尾
+      quitting = true;
+      return;
+    }
     e.preventDefault();
     win.hide();
     if (!trayHinted && tray) {
@@ -100,8 +110,12 @@ function trayImage() {
   const p = path.join(__dirname, 'build', 'icon.png');
   let img = nativeImage.createFromPath(p);
   if (img.isEmpty()) return nativeImage.createEmpty();
-  // 通知区图标按 16×16 显示（高 DPI 下系统会自己放大），先缩好再给，别让系统粗暴采样
-  return img.resize({ width: 16, height: 16, quality: 'best' });
+  // 通知区 100% 下是 16px，150%/200% 下分别是 24/32px。
+  // 只给 16px 让系统自己放大就会发虚，这里按当前缩放算好尺寸再给。
+  let scale = 1;
+  try { scale = screen.getPrimaryDisplay().scaleFactor || 1; } catch (e) { scale = 1; }
+  const px = Math.max(16, Math.round(16 * scale));
+  return img.resize({ width: px, height: px, quality: 'best' });
 }
 
 function showWindow() {
@@ -161,6 +175,14 @@ function createTray() {
 }
 
 ipcMain.handle('app:version', () => app.getVersion());
+
+ipcMain.on('win:close-behavior', (event, v) => { closeToTray = !!v; });
+ipcMain.handle('app:data-path', () => {
+  try { return app.getPath('userData'); } catch (e) { return ''; }
+});
+ipcMain.on('app:copy', (event, t) => {
+  try { clipboard.writeText(String(t || '')); } catch (e) { /* 剪贴板被占用就算了 */ }
+});
 
 // 只读状态：打包版冒烟用它确认「打包后托盘也建起来了、图标读得出来」（asar 里最容易翻车）
 ipcMain.handle('app:tray', () => ({
@@ -314,5 +336,6 @@ module.exports.__test = {
     if (!win.isVisible()) win.show();
     win.focus();
   },
-  isCompacted: () => compacted
+  isCompacted: () => compacted,
+  getCloseToTray: () => closeToTray
 };

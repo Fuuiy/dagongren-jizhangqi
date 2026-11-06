@@ -34,7 +34,13 @@
     fixRanges: [],         // 今天已补录的区间 [{from,to}]，防止重复补
     holidays: {},          // 联网拿到的节假日：{ '2026-01-01': true=放假 / false=调休上班 }
     holidayCheckedAt: 0,   // 上次联网检查的时间
-    inited: false
+    inited: false,
+    // 是否由用户亲自确认过参数（用默认值继续 = false，首页会一直挂提示条）
+    confirmedByUser: false,
+    // 点窗口 × 时收进托盘还是直接退出
+    closeToTray: true,
+    // 加班费倍率：只作用于「补录的班外加班」
+    otRate: 1
   };
 
   const EMOJIS = ['🎯', '📱', '💻', '🎧', '🏠', '✈️', '🎁', '🍰', '👗', '🚗'];
@@ -56,6 +62,7 @@
 
   let cfg = null;
   let celebrated = false;
+  let modeConfirmSkip = false;   // 切模式确认弹窗里点了「确定切换」后跳过二次询问
   let pendingMode = 'click';   // 第 6 条：卡片只改 pending，保存后才生效
   let pendingAuto = false;
   let lastGoalPct = null;      // 上一帧的目标进度，用来判断「刚刚达成」
@@ -122,6 +129,10 @@
     if (typeof m.fixDay !== 'string') m.fixDay = '';
     if (!m.holidays || typeof m.holidays !== 'object' || Array.isArray(m.holidays)) m.holidays = {};
     if (typeof m.holidayCheckedAt !== 'number') m.holidayCheckedAt = 0;
+    // 老用户（已经填过参数）不存在「用默认值混过去」这回事，直接算确认过
+    if (typeof m.confirmedByUser !== 'boolean') m.confirmedByUser = m.inited === true;
+    if (typeof m.closeToTray !== 'boolean') m.closeToTray = true;
+    m.otRate = (m.otRate === 1.5 || m.otRate === 2) ? m.otRate : 1;
     // 旧版本日期键没有前导零（2026-11-4），外部导入的备份又是有的（2026-11-04）。
     // 统一迁移成补零格式，同一天撞上了就合并，否则明细里一天会拆成两行
     const normKey = (k) => {
@@ -825,7 +836,9 @@
     $('#perHour').textContent = fmtMoney(c.perHour, c.perHour >= 1000 ? 0 : 2);
     $('#perDay').textContent = fmtMoney(c.perDay, 0);
     $('#perMin').textContent = fmtMoney(c.perMin, 2);
-    $('#perSecCard').textContent = fmtMoney(c.perSec, 4);
+    // 主卡给 2 位（0.0198 读不出感觉），精确值挂在 title 上，鼠标停留能看到
+    $('#perSecCard').textContent = fmtMoney(c.perSec, 2);
+    $('#perSecCard').title = fmtMoney(c.perSec, 4) + ' / 秒';
 
     renderTimeline(now, st);
     renderConvert(shownEarned);
@@ -833,25 +846,25 @@
     // 目标进度只叠加「还没进 settled 的增量」，已固化的部分已经在 settled 里
     renderGoal(st.done ? 0 : deltaEarned);
     renderClock(st);
+    renderDefBar();
     fitGuard();
   }
 
   /* 首页不滚动（桌面程序不让人"拉"），所以内容必须真的塞得下。
      万一某行提示（比如「是不是忘了点下班」）把高度撑出去了，
      就先收掉最不重要的那行吐槽，保证卡片和按钮永远完整。 */
-  let tightOn = false;
+  // 版面不够时分级收纳：先收「吐槽」，再收「换算卡 / 目标分项」，
+  // 绝不牺牲打卡按钮（小屏笔记本 1366×768@125% 就靠这个）
   function fitGuard() {
-    if (document.body.classList.contains('compact')) {
-      if (tightOn) { document.body.classList.remove('tight'); tightOn = false; }
-      return;
-    }
+    const body = document.body;
+    body.classList.remove('tight', 'tight2');
+    if (body.classList.contains('compact')) return;
     const sc = document.querySelector('.scroll');
     if (!sc) return;
-    if (tightOn) { document.body.classList.remove('tight'); tightOn = false; }
-    if (sc.scrollHeight - sc.clientHeight > 1) {
-      document.body.classList.add('tight');
-      tightOn = true;
-    }
+    if (sc.scrollHeight - sc.clientHeight <= 1) return;
+    body.classList.add('tight');
+    if (sc.scrollHeight - sc.clientHeight <= 1) return;
+    body.classList.add('tight2');
   }
 
   function renderTimeline(now, st) {
@@ -1101,6 +1114,8 @@
       $('#goalRemain').textContent = '还差 ' + fmtShort(remain);
       $('#goalEta').textContent = etaText(remain);
     }
+    const nextBtn = $('#btnNextGoal');
+    if (nextBtn) nextBtn.hidden = remain > 0;
     lastGoalPct = pct;
   }
 
@@ -2142,7 +2157,8 @@
       return;
     }
     const c = calc();
-    const money = r.sec * c.perSec;
+    const rate = cfg.otRate || 1;
+    const money = r.inSec * c.perSec + r.outSec * c.perSec * rate;
     // 把「哪部分是加班」说清楚：班外的钱不占今天的日薪额度
     const dur = fmtDuration(Math.round(r.sec / 60));
     let mark = '';
@@ -2312,8 +2328,9 @@
       return;
     }
     const c = calc();
-    // 补录 = 加班：全额按秒薪算，不再被「今天已满」砍掉
-    const amount = r.sec * c.perSec;
+    // 补录 = 加班：班内按 1 倍、班外按用户设的倍率，都不被「今天已满」砍掉
+    const rate = cfg.otRate || 1;
+    const amount = r.inSec * c.perSec + r.outSec * c.perSec * rate;
     if (amount <= 0) {
       const el = $('#fixHint');
       el.textContent = '这段算下来是 0 元，检查一下时间';
@@ -2564,6 +2581,12 @@
     });
     syncDaysSeg();
     updateLunchInfo();
+    renderDataPath();
+
+    syncOtSeg();
+    syncCloseSeg();
+    const sh = $('#salaryHint');
+    if (sh) sh.hidden = cfg.inited === true;      // 只有首启才提示「这是默认值」
 
     closeHistory();                       // 面板互斥，一次只开一个
     $('#mask').classList.add('on');
@@ -2727,6 +2750,105 @@
     if (w) { w.hidden = true; w.textContent = ''; }
   }
 
+  /* ---------- 轻提示 + 通用确认弹窗 ---------- */
+  let toastTimer = 0;
+  function toast(msg) {
+    const el = $('#toast');
+    if (!el) return;
+    el.textContent = msg;
+    el.hidden = false;
+    requestAnimationFrame(() => el.classList.add('on'));
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => {
+      el.classList.remove('on');
+      setTimeout(() => { el.hidden = true; }, 220);
+    }, 1500);
+  }
+
+  let dlgResolve = null;
+  function askDlg(title, html, okText, cancelText) {
+    return new Promise((resolve) => {
+      const mask = $('#dlgMask');
+      if (!mask) { resolve(true); return; }
+      $('#dlgTitle').textContent = title || '提示';
+      $('#dlgText').innerHTML = html || '';
+      $('#dlgOk').textContent = okText || '确定';
+      $('#dlgCancel').textContent = cancelText || '取消';
+      mask.hidden = false;
+      dlgResolve = resolve;
+    });
+  }
+  function closeDlg(ok) {
+    const mask = $('#dlgMask');
+    if (!mask || mask.hidden) return;
+    mask.hidden = true;
+    const r = dlgResolve;
+    dlgResolve = null;
+    if (r) r(!!ok);
+  }
+
+  // 首启没填参数就点「收起」：不能拿默认工资悄悄记账，先把选择权交回用户
+  function onCloseSheetClick() {
+    if (cfg.inited) { closeSheet(); return; }
+    askDlg('还没填你的工资',
+      '直接关掉的话，会按现在的 <b>' + fmtMoney(cfg.salary, 0) + '/月 · ' + cfg.workDays + ' 天 · '
+      + cfg.start + '–' + cfg.end + '</b> 开始记账。'
+      + '这些数字不是你的，首页会一直挂着提醒。',
+      '先用默认值', '回去填')
+      .then((ok) => {
+        if (!ok) return;
+        cfg.inited = true;
+        cfg.confirmedByUser = false;
+        save();
+        closeSheet();
+        render();
+        toast('先用默认值，随时点顶部黄条改成你的');
+      });
+  }
+
+  /* ---------- 设置面板里的开关类小件 ---------- */
+  function syncOtSeg() {
+    document.querySelectorAll('#segOt button').forEach((b) => {
+      b.classList.toggle('active', Number(b.dataset.ot) === (cfg.otRate || 1));
+    });
+    const note = $('#otRateNote');
+    if (note) note.textContent = (cfg.otRate || 1) + ' 倍';
+  }
+  function syncCloseSeg() {
+    document.querySelectorAll('#segClose button').forEach((b) => {
+      b.classList.toggle('active', (b.dataset.close === 'tray') === (cfg.closeToTray !== false));
+    });
+  }
+  function applyCloseBehavior() {
+    const api = window.desktop;
+    if (api && api.setCloseToTray) api.setCloseToTray(cfg.closeToTray !== false);
+  }
+
+  let dataPathCache = '';
+  function renderDataPath() {
+    const el = $('#dataPath');
+    if (!el) return;
+    const api = window.desktop;
+    if (!api || !api.dataPath) { el.textContent = '数据存在本机（浏览器本地存储）'; return; }
+    api.dataPath().then((dir) => {
+      if (!dir) return;
+      dataPathCache = dir;
+      el.textContent = '数据存在：' + dir;
+    }).catch(() => {});
+  }
+
+  // 用默认值混过首启时，首页一直挂一条可点的提醒
+  function renderDefBar() {
+    const bar = $('#defBar');
+    if (!bar) return;
+    const show = cfg.inited && !cfg.confirmedByUser;
+    bar.hidden = !show;
+    if (show) {
+      const n = $('#defSalary');
+      if (n) n.textContent = fmtMoney(cfg.salary, 0);
+    }
+  }
+
   function saveSheet() {
     // 第 1 关：数字。0 / 负数 / 字母 / 离谱大数一律拦住，
     // 不许再像以前那样 Math.max(0, …) 悄悄改掉然后照样存进去
@@ -2771,6 +2893,26 @@
       return;
     }
     disarmSave();
+
+    // 换计时方式会把今天已经按旧方式算出来的钱作废 —— 那可能是几百块，先问一次
+    const modeWillChange = pendingMode !== cfg.clockFrom || !!pendingAuto !== !!cfg.autoRun;
+    if (modeWillChange && !modeConfirmSkip) {
+      // 用屏幕上显示的那个数（打卡模式的钱还没结算，只算 settled 会漏）
+      const todayMoney = Math.max(0, lastShownEarned || 0);
+      if (todayMoney > 0.005) {
+        askDlg('要换计时方式吗？',
+          '换方式后，今天按旧方式算出的 <b>' + fmtMoney(todayMoney, 2) + '</b> 会清零，从 0 重新开始。'
+          + '<br>手动补录的钱会保留。',
+          '确定切换', '先不换')
+          .then((ok) => {
+            if (!ok) return;
+            modeConfirmSkip = true;
+            saveSheet();
+            modeConfirmSkip = false;
+          });
+        return;
+      }
+    }
 
     // 班次（时间）变了 = 今天的时间口径整个换了，旧口径下算出的数字不能接着用
     const timeChanged = start !== cfg.start || end !== cfg.end
@@ -2829,6 +2971,7 @@
     cfg.dailyHours = (pendingMode === 'click' && dhVal > 0) ? dhVal : null;
 
     cfg.inited = true;
+    cfg.confirmedByUser = true;          // 这次是他自己点「存好啦」的
 
     // 班次变了：已确认的钱（补录、已收工结算）是既成事实，保留；
     // 正在计时的段落按新口径接着跑，不重算旧段，避免两套口径相加
@@ -2855,6 +2998,7 @@
     render();
     closeSheet();
     quoteTick();
+    toast('存好啦 ♡');
   }
 
   function buildEmojiRow() {
@@ -2971,9 +3115,77 @@
     $('#btnBreak').addEventListener('click', toggleBreak);
     $('#lnkRedo').addEventListener('click', redoShift);
     $('#btnEditGoal').addEventListener('click', openSheet);
-    $('#mask').addEventListener('click', closeSheet);
-    $('#btnCloseSheet').addEventListener('click', closeSheet);
+    $('#mask').addEventListener('click', onCloseSheetClick);
+    $('#btnCloseSheet').addEventListener('click', onCloseSheetClick);
     $('#btnSave').addEventListener('click', saveSheet);
+
+    // 通用确认弹窗
+    $('#dlgOk').addEventListener('click', () => closeDlg(true));
+    $('#dlgCancel').addEventListener('click', () => closeDlg(false));
+    $('#dlgMask').addEventListener('click', (e) => { if (e.target.id === 'dlgMask') closeDlg(false); });
+
+    // 加班倍率：点一下就落盘（不用等「存好啦」，符合"开关"的直觉）
+    document.querySelectorAll('#segOt button').forEach((b) => {
+      b.addEventListener('click', () => {
+        cfg.otRate = Number(b.dataset.ot) || 1;
+        save();
+        syncOtSeg();
+        toast('加班按 ' + (cfg.otRate === 1 ? '1 倍（不加价）' : cfg.otRate + ' 倍') + ' 算');
+      });
+    });
+
+    // 点 × 的行为：立即生效并通知主进程
+    document.querySelectorAll('#segClose button').forEach((b) => {
+      b.addEventListener('click', () => {
+        cfg.closeToTray = b.dataset.close === 'tray';
+        save();
+        syncCloseSeg();
+        applyCloseBehavior();
+        toast(cfg.closeToTray ? '点 × 会收到右下角继续计时' : '点 × 会直接退出程序');
+      });
+    });
+
+    // 复制数据目录
+    const copyBtn = $('#btnCopyPath');
+    if (copyBtn) copyBtn.addEventListener('click', () => {
+      const api = window.desktop;
+      if (!dataPathCache) { renderDataPath(); toast('路径还没取到，再点一次'); return; }
+      if (api && api.copyText) { api.copyText(dataPathCache); toast('路径已复制'); }
+    });
+
+    // 首页黄条：点一下直接回设置改工资
+    const defBar = $('#defBar');
+    if (defBar) defBar.addEventListener('click', () => openSheet());
+
+    // 目标达成后：换下一个目标（把入口直接递到手上）
+    const nextGoal = $('#btnNextGoal');
+    if (nextGoal) nextGoal.addEventListener('click', () => {
+      openSheet();
+      const g = $('#goalGroup');
+      if (g) g.open = true;
+      setTimeout(() => {
+        const el = $('#inGoalName');
+        if (el) { el.focus(); el.select && el.select(); }
+      }, 260);
+    });
+
+    // 键盘快捷键（只在窗口内，不抢系统全局热键）
+    document.addEventListener('keydown', (e) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      const k = e.key;
+      if (k === 'Enter') {
+        e.preventDefault();
+        if ($('#sheet').classList.contains('on')) saveSheet();
+        else toggleClock();
+      } else if (k.toLowerCase() === 'b') {
+        e.preventDefault();
+        if (!$('#btnBreak').hidden) toggleBreak();
+      } else if (k === ',') {
+        e.preventDefault();
+        if ($('#sheet').classList.contains('on')) onCloseSheetClick();
+        else openSheet();
+      }
+    });
 
     document.querySelectorAll('#modeCards .mcard').forEach((b) => {
       b.addEventListener('click', () => {
@@ -3077,8 +3289,11 @@
     });
 
     document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      // 层级从高到低：确认弹窗 → 时间滑块 → 设置面板
+      if (!$('#dlgMask').hidden) { e.preventDefault(); closeDlg(false); return; }
       // 滑块浮层开着的时候，Esc 只关滑块，别把整个设置面板一起关掉
-      if (e.key === 'Escape' && $('#tpMask').hidden) closeSheet();
+      if ($('#tpMask').hidden) onCloseSheetClick();
     });
 
     document.querySelectorAll('.form input').forEach((inp) => {
@@ -3120,6 +3335,7 @@
     quoteTick();
     setInterval(quoteTick, 18000);
 
+    applyCloseBehavior();
     if (!cfg.inited) setTimeout(openSheet, 500);
   }
 

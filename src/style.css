@@ -899,10 +899,13 @@ body {
   flex: 0 0 auto;
 }
 
-/* 空间不够时（时间轴冒出提醒、目标名换行……）先收掉最不重要的那行吐槽：
-   首页不许滚动，也不许把打卡按钮挤出去 */
+/* 空间不够时（时间轴冒出提醒、目标名换行、小屏笔记本……）分级收：
+   第一级收吐槽，第二级再收「钱钱换算」和目标分项，打卡按钮永远不动 */
 body.tight .quote { display: none; }
 body.tight .scroll { gap: 7px; }
+body.tight2 .convert { display: none; }
+body.tight2 .goal-parts { display: none; }
+body.tight2 .scroll { gap: 6px; }
 
 /* ---------- 底部横杆（正常态=缩小，迷你态=展开） ---------- */
 .dock {
@@ -1978,3 +1981,114 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 
 /* 午休两个时间框稍微放宽，给小钟留位置 */
 .lunch-row .tin-wrap > .tin { width: 66px; }
+
+/* ============================================================
+   v1.2.0
+   1) 首启没用真参数时的提示条
+   2) 保存后的轻提示（toast）与通用确认弹层
+   3) 加班倍率 / 关闭行为两个分段控件、数据路径、换目标按钮
+   ============================================================ */
+
+/* ---------- 1. 默认值提示条 ---------- */
+.def-bar {
+  flex: 0 0 auto;
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 1px solid #FFE0B8;
+  background: linear-gradient(180deg, #FFF8EC 0%, #FFF3E0 100%);
+  color: #A9762F;
+  border-radius: 12px;
+  padding: 8px 11px;
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.45;
+  cursor: pointer;
+  transition: background .18s, border-color .18s;
+  -webkit-app-region: no-drag;
+}
+.def-bar[hidden] { display: none; }
+.def-bar:hover { background: #FFEFD6; border-color: #FFD08A; }
+.def-bar b { color: #8A5A16; }
+
+/* ---------- 2. toast 与确认弹层 ---------- */
+.toast {
+  position: fixed;
+  left: 50%;
+  top: 54px;                 /* 贴标题栏下方：不会挡住底部的打卡按钮 */
+  transform: translateX(-50%) translateY(-6px);
+  z-index: 200;
+  background: rgba(120, 86, 96, .93);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .3px;
+  padding: 8px 15px;
+  border-radius: 12px;
+  box-shadow: 0 10px 24px -10px rgba(120, 86, 96, .6);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .18s ease, transform .18s ease;
+}
+.toast[hidden] { display: none; }
+.toast.on { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+.dlg-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 160;
+  background: rgba(120, 90, 105, .3);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 22px;
+}
+.dlg-mask[hidden] { display: none; }
+.dlg {
+  width: 100%;
+  max-width: 316px;
+  background: #FFFCFA;
+  border: 1px solid #FFE6EC;
+  border-radius: 18px;
+  padding: 16px 16px 13px;
+  box-shadow: 0 18px 44px -18px rgba(190, 120, 145, .55);
+  animation: dlgIn .18s cubic-bezier(.32, 1.2, .6, 1);
+}
+@keyframes dlgIn { from { transform: translateY(8px) scale(.97); opacity: .6; } to { transform: none; opacity: 1; } }
+.dlg-title { margin: 0 0 6px; font-size: 13px; font-weight: 800; color: #6F5A62; }
+.dlg-text { margin: 0 0 14px; font-size: 12px; line-height: 1.6; color: #8C7A82; }
+.dlg-text b { color: #D9536F; }
+.dlg-actions { display: flex; gap: 8px; }
+.dlg-actions button { flex: 1 1 0; padding: 9px 0; font-size: 12px; }
+
+/* ---------- 3. 设置面板里的小件 ---------- */
+.f-hint-warn { color: #C98A2B; }
+.f-hint-warn[hidden] { display: none; }
+.data-path { word-break: break-all; color: #A08E96; font-size: 10.5px; }
+.month-btns { display: flex; align-items: center; gap: 6px; }
+#btnNextGoal { color: #D9536F; border-color: #FFD5DF; }
+#btnNextGoal:hover { background: #FFE9EF; }
+#segOt button[data-ot], #segClose button[data-close] { font-size: 11px; }
+
+
+/* ---------- v1.2.0：小屏（工作区不足 660px）进一步压紧 ---------- */
+@media (max-height: 660px) {
+  .scroll { gap: 6px; padding-top: 0; padding-bottom: 6px; }
+  .hero { padding: 10px 14px 9px; }
+  .persec .num { font-size: 33px; }
+  .hero-foot { margin-top: 6px; }
+  .metric { padding: 7px 0 6px; }
+  .card { padding: 10px 13px; }
+  .goal-head { margin-bottom: 7px; }
+  .tl-track { margin: 7px 0 5px; }
+  .clock-row { gap: 8px; }
+  .clock { padding: 11px 0; }
+}
+@media (max-height: 600px) {
+  .persec .num { font-size: 29px; }
+  .metric .m-ico { font-size: 13px; }
+  .metric b { font-size: 14px; }
+  .goal-foot { font-size: 11px; }
+}
