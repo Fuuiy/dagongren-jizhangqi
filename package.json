@@ -1,7 +1,7 @@
 {
   "name": "dagongren-jizhangqi",
   "productName": "打工人记账器",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "打工人记账器 - 看见你每一秒赚到的钱",
   "main": "main.js",
   "author": "Fuuiy <84946630@qq.com>",

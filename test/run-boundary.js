@@ -39,6 +39,13 @@ const near = (a, b, tol) => Math.abs(a - b) <= tol;
 const INJECT = `(() => {
   if (window.__sim2) return 'already';
   window.__sim2 = true;
+  // v1.2.1：没干满就下班的确认弹窗——这些套件只关心结算结果，自动点「照样下班」
+  try {
+    const dm = document.getElementById('dlgMask');
+    if (dm) new MutationObserver(() => {
+      if (!dm.hidden) setTimeout(() => { const ok = document.getElementById('dlgOk'); if (ok) ok.click(); }, 0);
+    }).observe(dm, { attributes: true, attributeFilter: ['hidden'] });
+  } catch (e) {}
   const RealDate = Date;
   window.__base = null; window.__off = 0;
   const cur = () => (window.__base == null ? RealDate.now() : window.__base) + window.__off;

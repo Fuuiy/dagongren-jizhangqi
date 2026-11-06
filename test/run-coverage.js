@@ -27,6 +27,13 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const R = (js) => win.webContents.executeJavaScript(js, true);
 
 const INJECT = `(() => {
+  // v1.2.1：没干满就下班的确认弹窗——这些套件只关心结算结果，自动点「照样下班」
+  try {
+    const dm = document.getElementById('dlgMask');
+    if (dm) new MutationObserver(() => {
+      if (!dm.hidden) setTimeout(() => { const ok = document.getElementById('dlgOk'); if (ok) ok.click(); }, 0);
+    }).observe(dm, { attributes: true, attributeFilter: ['hidden'] });
+  } catch (e) {}
   if (window.__sim3) return 'already';
   window.__sim3 = true;
   const RealDate = Date;
@@ -524,6 +531,11 @@ function betterAnalyze(scripts, src) {
 
 app.whenReady().then(async () => {
   ipcMain.handle('app:version', () => PKG_VERSION);   // 测试主进程的 app.getVersion() 是 Electron 版本，这里回应用版本
+  // v1.2.0/1.2.1 新增的 IPC：数据路径、托盘状态、关闭行为、复制
+  ipcMain.handle('app:data-path', () => path.join(require('os').tmpdir(), 'dgjz-harness-coverage'));
+  ipcMain.handle('app:tray', () => ({ hasTray: true, icon: { width: 16, height: 16 }, tooltip: 'coverage' }));
+  ipcMain.on('win:close-behavior', () => {});
+  ipcMain.on('app:copy', () => {});
   ipcMain.handle('holidays:fetch', () => ({ off: ['2026-11-26'], work: [] }));
   ipcMain.handle('data:export', () => ({ ok: true, path: path.join(ROOT, '.preview', 'cov-export.json') }));
   ipcMain.handle('data:import', () => {

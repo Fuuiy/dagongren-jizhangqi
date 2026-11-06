@@ -4,7 +4,7 @@
 > 一个 424×720 的 Windows 桌面小挂件，喝口水、开个会、熬个夜，都能看见自己赚了多少。
 
 <p>
-  <img alt="version" src="https://img.shields.io/badge/version-1.2.0-FF8FA3?style=flat-square">
+  <img alt="version" src="https://img.shields.io/badge/version-1.2.1-FF8FA3?style=flat-square">
   <img alt="platform" src="https://img.shields.io/badge/platform-Windows%20x64-4C9AFF?style=flat-square">
   <img alt="electron" src="https://img.shields.io/badge/Electron-33-47848F?style=flat-square&logo=electron&logoColor=white">
   <img alt="license" src="https://img.shields.io/badge/license-MIT-97CA00?style=flat-square">
@@ -117,7 +117,7 @@ export ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-b
 │   └── app.js           全部逻辑：计时、结算、校验、渲染、存档
 ├── build/icon.png       应用图标（electron-builder 自动转 ico）
 ├── electron-builder.yml 打包配置
-├── test/                17 个自动化测试套件（见下）
+├── test/                18 个自动化测试套件（见下）
 └── docs/                使用说明、需求文档、测试报告、截图
 ```
 
@@ -125,7 +125,7 @@ export ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-b
 
 ## 测试
 
-这个项目的测试不是摆设：**17 个 Electron 自动化套件、186 条断言**，全部真跑真实渲染进程（不是 mock DOM），包括真实 `execCommand` 键盘编辑、真实点击、真实安装包冒烟。
+这个项目的测试不是摆设：**18 个 Electron 自动化套件、196 条断言**，全部真跑真实渲染进程（不是 mock DOM），包括真实 `execCommand` 键盘编辑、真实点击、真实安装包冒烟。
 
 | 套件 | 覆盖 | 断言 |
 |---|---|---|
@@ -139,6 +139,7 @@ export ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-b
 | `run-mode-reset.js` | 切换计时方式：金额归零、不替你打卡、补录保留 | 12 |
 | `run-tray.js` | 托盘：点 × 只隐藏、图标开关、退出路径 | 7 |
 | `run-firstrun.js` | 首启校验、清零确认、倍率、关闭行为、快捷键、数据路径 | 15 |
+| `run-clickmode.js` | 打卡模式：应工作参照、未干满确认、超时提示 | 10 |
 | `run-network.js` | 网络异常：节假日接口超时/500/坏 JSON 降级 | 9 |
 | `run-compat.js` | 兼容：缩放、DPI、极端分辨率 | 8 |
 | `run-v111.js` | 新控件：时间滑块、粉色数字箭头 | 8 |

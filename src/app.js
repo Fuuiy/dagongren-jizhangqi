@@ -821,6 +821,17 @@
     $('#todayEarned').textContent = fmtNum(shownEarned, shownEarned >= 10000 ? 2 : 3);
     $('#perSec').textContent = fmtPerSec(c.perSec);
     $('#worked').textContent = hms(shownSec * 1000);
+    // 打卡那一刻：班次时间只是参照，但「应工作多久」要摆在眼前
+    const wn = $('#workedNeed');
+    if (wn) {
+      if (st.mode === 'click') {
+        wn.hidden = false;
+        wn.textContent = ' / ' + hmShort(c.capSec);
+      } else {
+        wn.hidden = true;
+        wn.textContent = '';
+      }
+    }
 
     // 加班：只在超出应出勤时长时出现
     const otPill = $('#otPill');
@@ -861,9 +872,9 @@
     if (body.classList.contains('compact')) return;
     const sc = document.querySelector('.scroll');
     if (!sc) return;
-    if (sc.scrollHeight - sc.clientHeight <= 1) return;
+    if (sc.scrollHeight - sc.clientHeight <= 0) return;
     body.classList.add('tight');
-    if (sc.scrollHeight - sc.clientHeight <= 1) return;
+    if (sc.scrollHeight - sc.clientHeight <= 0) return;
     body.classList.add('tight2');
   }
 
@@ -936,6 +947,29 @@
     else if (st.within) tlText = '距下班 ' + hms(b.end - now);
     else tlText = '今天结束啦 ♪';
     $('#tlLeft').textContent = tlText;
+
+    // 打卡那一刻：把「本班应工作的时间段 / 时长」摆在时间轴下面当参照，
+    // 实际区间仍然只按真实打卡画（这点是之前特意定过的，不改）
+    const ref = $('#tlRef');
+    if (ref) {
+      if (st.mode === 'click') {
+        const need = calc().capSec;
+        const lunchMin = b.hasLunch ? Math.round((b.lunchEnd - b.lunchStart) / MIN) : 0;
+        let txt = '应工作 <b>' + hmShort(need) + '</b>（参照 ' + hhmm(b.start) + '–' + hhmm(b.end)
+          + (lunchMin > 0 ? '，含午休 ' + lunchMin + ' 分钟' : '') + '）';
+        if (clickDone) {
+          txt += ' · 实际干了 ' + hmShort(Math.max(0, (axisEnd - axisStart) / 1000));
+        } else if (byClick) {
+          const done = manualSeconds(now);
+          txt += ' · 已完成 ' + Math.min(100, Math.round((done / need) * 100)) + '%';
+        }
+        ref.innerHTML = txt;
+        ref.hidden = false;
+      } else {
+        ref.hidden = true;
+        ref.textContent = '';
+      }
+    }
 
     // 班次明显不合理（跨度太长）时，主界面也要提醒，不用非得打开设置
     const tw = $('#tlWarn');
@@ -1307,8 +1341,9 @@
     const dock = $('#dock');
     if (!tb || !sc || !hero || !dock) return 240;
     const cs = getComputedStyle(sc);
-    const padT = parseFloat(cs.paddingTop) || 0;
     const padB = parseFloat(cs.paddingBottom) || 0;
+    // hero 上面可能还有别的块（比如"默认值"提示条），按实际偏移算，别假设只有 padding
+    const padT = Math.max(0, hero.getBoundingClientRect().top - sc.getBoundingClientRect().top);
     const heroH = Math.ceil(hero.getBoundingClientRect().height);
     return Math.ceil(tb.offsetHeight + padT + heroH + padB + dock.offsetHeight);
   }
@@ -1503,13 +1538,31 @@
     // 打卡那一刻：随时能打，随时能下
     if (st.started) {
       const wasBreak = st.onBreak;
-      clockOutManual(now);
-      if (wasBreak && cfg.lastShift) {
-        cfg.lastShift.breakBefore = true;
-        save();
+      const done = () => {
+        clockOutManual(now);
+        if (wasBreak && cfg.lastShift) {
+          cfg.lastShift.breakBefore = true;
+          save();
+        }
+        render();
+        quoteTick();
+      };
+      // 班次时间在打卡模式下只是参照，但它是「应工作多久」的依据：
+      // 没干满就下班，先说清楚差多少，别让人以为系统算错了钱
+      const worked = manualSeconds(now);
+      const need = calc().capSec;
+      // 提示里的时长按分钟取整（干了 4 小时零 2 秒，说"少 3:59"会让人以为算错）
+      const wMin = Math.floor(worked / 60) * 60;
+      if (worked + 30 < need) {
+        askDlg('还没干满这一班',
+          '现在下班的话，今天算 <b>' + hmShort(wMin) + '</b>，比应工作的 <b>' + hmShort(need)
+          + '</b> 少 <b>' + hmShort(Math.max(0, need - wMin)) + '</b>。钱按实际工时算，确定下班吗？',
+          '照样下班', '再干一会儿')
+          .then((ok) => { if (ok) done(); });
+        return;
       }
-      render();
-      quoteTick();
+      done();
+      if (worked > need + 60) toast('超出应工作 ' + hmShort(worked - need) + '，按加班算');
       return;
     }
     if (st.done) { shake($('#btnClock')); return; }
@@ -1907,12 +1960,22 @@
     const spanMin = overnight ? (z + 1440 - a) : (z - a);
     const hTxt = (spanMin / 60).toFixed(spanMin % 60 === 0 ? 0 : 1);
 
+    const lunchMin = (() => {
+      const ls = readTime('#inLunchStart'), le = readTime('#inLunchEnd');
+      if (!ls || !le) return 0;
+      const d = hm2min(le) - hm2min(ls);
+      return d > 0 ? d : 0;
+    })();
+    const clickTip = pendingMode === 'click'
+      ? '打卡那一刻模式下，这两个时间只作参考：用来算时薪、以及"应工作 ' + hmShort(Math.max(0, spanMin - lunchMin) * 60) + '"'
+      : '';
+
     if (!overnight) {
       if (spanMin > 12 * 60) {
         el.textContent = '这一班有 ' + hTxt + ' 小时，确认没填错？';
         el.classList.add('warn');
       } else {
-        el.textContent = '';
+        el.textContent = clickTip;
         el.classList.remove('warn');
       }
       return;

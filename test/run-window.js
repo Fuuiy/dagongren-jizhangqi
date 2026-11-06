@@ -96,6 +96,13 @@ const SNAP = `(() => {
 const INJECT = `(() => {
   if (window.__simmed) return 'ok';
   window.__simmed = true;
+  // v1.2.1：没干满就下班的确认弹窗——这些套件只关心结算结果，自动点「照样下班」
+  try {
+    const dm = document.getElementById('dlgMask');
+    if (dm) new MutationObserver(() => {
+      if (!dm.hidden) setTimeout(() => { const ok = document.getElementById('dlgOk'); if (ok) ok.click(); }, 0);
+    }).observe(dm, { attributes: true, attributeFilter: ['hidden'] });
+  } catch (e) {}
   const RN = Date.now.bind(Date);
   const RealDate = window.Date;
   window.__off = 0;
@@ -115,6 +122,11 @@ async function reset() {
   // 关掉首次引导的设置面板
   await R(`if (document.querySelector('#sheet').classList.contains('on')) document.querySelector('#btnCloseSheet').click(); 'ok'`);
   await sleep(300);
+  // v1.2.0 起首启收起会先问「按默认值开始吗」，测试里选「先用默认值」
+  if (await R(`!document.querySelector('#dlgMask').hidden`)) {
+    await R(`document.querySelector('#dlgOk').click(); 'ok'`);
+    await sleep(400);
+  }
 }
 
 async function compactOn() {

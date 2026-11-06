@@ -40,6 +40,13 @@ const CLICK = (sel) => `document.querySelector('${sel}').click(); 'ok'`;
 const INJECT = `(() => {
   if (window.__simmed) return 'ok';
   window.__simmed = true;
+  // v1.2.1：没干满就下班的确认弹窗——这些套件只关心结算结果，自动点「照样下班」
+  try {
+    const dm = document.getElementById('dlgMask');
+    if (dm) new MutationObserver(() => {
+      if (!dm.hidden) setTimeout(() => { const ok = document.getElementById('dlgOk'); if (ok) ok.click(); }, 0);
+    }).observe(dm, { attributes: true, attributeFilter: ['hidden'] });
+  } catch (e) {}
   const RN = Date.now.bind(Date);
   const RealDate = window.Date;
   window.__off = 0;

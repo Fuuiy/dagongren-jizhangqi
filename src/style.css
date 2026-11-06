@@ -2092,3 +2092,31 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   .metric b { font-size: 14px; }
   .goal-foot { font-size: 11px; }
 }
+
+
+/* ---------- v1.2.1：打卡那一刻的「应工作」参照 ---------- */
+.worked-need {
+  font-style: normal;
+  font-size: 10px;
+  color: #C0A8B0;
+  margin-left: 2px;
+  font-variant-numeric: tabular-nums;
+}
+.worked-need[hidden] { display: none; }
+.tl-ref {
+  margin: 5px 0 0;
+  font-size: 10px;
+  color: #B49AA3;
+  letter-spacing: .2px;
+  line-height: 1.4;
+}
+.tl-ref[hidden] { display: none; }
+.tl-ref b { color: #E58AA0; }
+
+/* 迷你态空间紧：不显示「/ 8:00」，否则 hero 底部会换行把卡片撑高 */
+body.compact .worked-need { display: none; }
+body.compact .def-bar { display: none; }   /* 迷你条只有 200 多高，塞不下这条提醒 */
+/* 二级收紧时，「应工作」参照行属于补充信息，可以收掉 */
+body.tight2 .tl-ref { display: none; }
+/* 二级收紧时，「用的还是默认值」这条提醒也先让位——打卡按钮更重要 */
+body.tight2 .def-bar { display: none; }

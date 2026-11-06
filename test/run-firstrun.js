@@ -280,7 +280,12 @@ async function main() {
   await sleep(900);
   const k1 = await S();
   await R(`document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true, bubbles: true })); 'ok'`);
-  await sleep(900);
+  await sleep(700);
+  // v1.2.1：没干满就下班会先问一句，这里点「照样下班」
+  if (await R(`!document.querySelector('#dlgMask').hidden`)) {
+    await R(`document.querySelector('#dlgOk').click(); 'ok'`);
+    await sleep(600);
+  }
   const k2 = await S();
   record('F11', '快捷键 Ctrl+Enter：第一次打卡（工作中），第二次下班（已收工）',
     k1.state.indexOf('工作') >= 0 && k2.state.indexOf('收工') >= 0,

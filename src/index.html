@@ -66,7 +66,7 @@
       <div class="hero-foot">
         <span class="rate-pill">每秒 +<b id="perSec">0.0000</b></span>
         <span class="ot-pill" id="otPill" hidden>加班 <b id="otTime">0:00</b></span>
-        <span class="worked-text">已工作 <b id="worked">00:00:00</b></span>
+        <span class="worked-text">已工作 <b id="worked">00:00:00</b><i class="worked-need" id="workedNeed" hidden></i></span>
       </div>
 
       <div class="coin-layer" id="coinLayer"></div>
@@ -148,6 +148,7 @@
         <span id="tlStart">09:00 上班</span>
         <span id="tlEnd">18:00 下班</span>
       </div>
+      <p class="tl-ref" id="tlRef" hidden></p>
     </section>
 
     <!-- 钱钱换算 -->
@@ -182,7 +183,7 @@
 
   <!-- 底部横杆：正常态点它缩小，迷你态点它展开（两种态都在，位置不跳） -->
   <footer class="dock" id="dock">
-    <span class="dock-ver" id="foot">每一秒都算数 ♡ <span class="ver" id="ver">v1.2.0</span></span>
+    <span class="dock-ver" id="foot">每一秒都算数 ♡ <span class="ver" id="ver">v1.2.1</span></span>
     <button class="compact-bar" id="compactBar" type="button" title="缩成小窗" aria-label="缩成小窗">
       <span class="cb-grip"></span>
     </button>
