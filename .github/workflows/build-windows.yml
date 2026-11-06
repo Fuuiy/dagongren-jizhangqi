@@ -7,6 +7,9 @@ on:
     tags:
       - 'v*'
 
+permissions:
+  contents: write        # 打 tag 时 softprops/action-gh-release 需要写 Release，缺了会报 not accessible by integration
+
 jobs:
   build:
     runs-on: windows-latest
