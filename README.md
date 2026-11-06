@@ -118,7 +118,7 @@ export ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-b
 ├── build/icon.png       应用图标（electron-builder 自动转 ico）
 ├── electron-builder.yml 打包配置
 ├── test/                20 个自动化测试套件（见下）
-└── docs/                使用说明、需求文档、测试报告、截图
+└── docs/                使用说明、发布说明、截图
 ```
 
 **没有引入任何第三方运行时依赖**——`node_modules` 里只有 electron 和 electron-builder 两个开发依赖。
