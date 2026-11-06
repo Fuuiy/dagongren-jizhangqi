@@ -16,7 +16,9 @@
     "test:inputs": "electron test/run-inputs.js",
     "test:overtime": "electron test/run-overtime.js",
     "test:window": "electron test/run-window.js",
-    "test:coverage": "electron test/run-coverage.js"
+    "test:coverage": "electron test/run-coverage.js",
+    "pack:dist": "npm run build:win && node scripts/sync-dist.js",
+    "sync:dist": "node scripts/sync-dist.js"
   },
   "devDependencies": {
     "electron": "^33.2.0",

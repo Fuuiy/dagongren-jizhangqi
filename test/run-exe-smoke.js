@@ -206,20 +206,37 @@ async function main() {
   await sleep(300);
   const g0 = await R(`(() => ({ w: window.outerWidth, h: window.outerHeight }))()`);
   await R(`document.querySelector('#btnCompact').click(); 'ok'`);
-  await sleep(1300);
-  const g1 = await R(`(() => ({ w: window.outerWidth, h: window.outerHeight, compact: document.body.classList.contains('compact'),
+  // 窗口 resize 是异步的：固定等 1.3 秒在机器忙的时候会读到旧尺寸（曾偶发失败两次）
+  // 改成轮询到高度真的降下来，最多等 4.5 秒
+  const READ_G = `(() => ({ w: window.outerWidth, h: window.outerHeight, compact: document.body.classList.contains('compact'),
     title: document.querySelector('#compactBar').title,
-    grip: Math.round(document.querySelector('.cb-grip').getBoundingClientRect().width) }))()`);
+    grip: Math.round(document.querySelector('.cb-grip').getBoundingClientRect().width),
+    dbg: { tb: document.querySelector('.titlebar').offsetHeight,
+      heroH: Math.ceil(document.querySelector('#hero').getBoundingClientRect().height),
+      dockH: document.querySelector('#dock').offsetHeight,
+      frozen: document.querySelector('#hero').style.padding || '(未冻结)',
+      body: document.body.className } }))()`;
+  let g1 = null;
+  for (let i = 0; i < 30; i++) {
+    await sleep(300);
+    g1 = await R(READ_G);
+    if (g1 && g1.h < g0.h - 50) break;
+  }
   await R(`document.querySelector('#compactBar').click(); 'ok'`);
-  await sleep(900);
-  const g2 = await R(`(() => ({ w: window.outerWidth, h: window.outerHeight, compact: document.body.classList.contains('compact'),
-    title: document.querySelector('#compactBar').title,
-    grip: Math.round(document.querySelector('.cb-grip').getBoundingClientRect().width) }))()`);
+  let g2 = null;
+  for (let i = 0; i < 24; i++) {
+    await sleep(250);
+    g2 = await R(`(() => ({ w: window.outerWidth, h: window.outerHeight, compact: document.body.classList.contains('compact'),
+      title: document.querySelector('#compactBar').title,
+      grip: Math.round(document.querySelector('.cb-grip').getBoundingClientRect().width) }))()`);
+    if (g2 && g2.h > g0.h - 50) break;
+  }
   record('EXE-06', '打包版小窗/展开：只收高度（宽度不变）、横杆加长；展开恢复原宽高',
     g1.compact && g1.h < g0.h - 200 && Math.abs(g1.w - g0.w) <= 2 && g1.grip > g2.grip + 20
     && !g2.compact && g2.h >= g0.h - 4 && Math.abs(g2.w - g0.w) <= 2 && g2.title === '缩成小窗',
     '完整 ' + g0.w + '×' + g0.h + ' → 小窗 ' + g1.w + '×' + g1.h + '（横杆 ' + g1.grip + '） → 展开 '
-    + g2.w + '×' + g2.h + '（横杆 ' + g2.grip + '）');
+    + g2.w + '×' + g2.h + '（横杆 ' + g2.grip + '）'
+    + (g1.h >= g0.h - 200 ? ' | 没收下去，分量=' + JSON.stringify(g1.dbg) : ''));
 
   // 7. 退出重开：数据持久化
   const settledBefore = (await R(SNAP)).cfg.settled;
