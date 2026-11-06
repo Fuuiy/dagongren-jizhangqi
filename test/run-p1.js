@@ -462,8 +462,11 @@ async function t_m4_night() {
 
 async function t_m4_salary() {
   await reset();
-  await R(`window.__at(10, 30); 'ok'`);                  // 先钉时钟，再开全自动（否则会被真实时间抢先结算）
-  await setMode('schedule', 1);                          // 1.5h，避开午休段
+  // 切换时刻钉在班次开始前（08:30）：v1.2.2 起「切换后本班从切换那一刻起算」，
+  // 在班次前切换时起算点仍是 09:00，才能校验「10:30 已计 1.5h」这个原始口径
+  await R(`window.__at(8, 30); 'ok'`);
+  await setMode('schedule', 1);
+  await R(`window.__at(10, 30); 'ok'`);                  // 再看 10:30 的状态（1.5h，避开午休段）
   await sleep(450);
   const s1 = await R(SNAP);
   await openSettings();
@@ -485,8 +488,10 @@ async function t_m4_salary() {
 
 async function t_m5_auto() {
   await reset();
-  await R(`window.__at(9, 30); 'ok'`);
+  // 同上：在班次开始前切换，起算点仍是 09:00
+  await R(`window.__at(8, 30); 'ok'`);
   await setMode('schedule', 1);
+  await R(`window.__at(9, 30); 'ok'`);
   await sleep(400);
   await R(`window.__later(1800e3); document.querySelector('#btnLeave').click(); 'ok'`);   // 10:00 请假
   await sleep(500);

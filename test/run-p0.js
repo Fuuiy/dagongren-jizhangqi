@@ -252,13 +252,17 @@ async function t5() {
 
 async function t6() {
   await reset();
-  // 必须先把时钟钉在 09:30 再开全自动：否则真实时间若已过下班点，
-  // 一切到全自动就会先按真实时间把当天结算掉（测试会误判成「09:30 就赚满」）
-  await R(`window.__at(9, 30); 'ok'`);
+  // 两件事都得做：
+  // 1) 切换时刻要钉在班次开始之前（08:30）——v1.2.2 起「切换后本班从切换那一刻起算」，
+  //    在班次前切换时起算点仍等于 09:00，才能校验「全自动按班计薪」的原始口径
+  // 2) 不能等真实时间：否则真实时间若已过下班点，切过去会先按真实时间把当天结算掉
+  await R(`window.__at(8, 30); 'ok'`);
   await openSettings();
   await R(`document.querySelector('.mcard[data-mode="schedule"][data-auto="1"]').click(); 'ok'`);
   await saveSettings();
   await sleep(500);
+  await R(`window.__at(9, 30); 'ok'`);
+  await sleep(450);
   const s1 = await R(SNAP);
   const half = perDay * 0.5 / 8;
   const ok1 = near(s1.earned, half, 0.5);

@@ -248,6 +248,8 @@ async function o3_auto_scope() {
 /* ---------- O4：加班不占日薪额度 ---------- */
 async function o4_ot_not_eat_base() {
   await reset();
+  // v1.2.2：切换后本班从切换时刻起算，所以切换得在班次开始之前做（否则起算点跑到 18:xx，正班一分不涨）
+  await R(`window.__at(8, 0); 'ok'`);
   await setMode('schedule', 1);
   await R(`window.__at(10); 'ok'`);
   await sleep(400);

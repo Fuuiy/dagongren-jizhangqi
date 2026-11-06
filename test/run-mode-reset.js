@@ -43,6 +43,7 @@ const INJECT = `(() => {
   }
   window.Date = RD;
   window.__at = (h, m, s) => { const t = new RealDate(); t.setHours(h, m || 0, s || 0, 0); window.__off = t.getTime() - RN(); };
+  window.__later = (ms) => { window.__off += ms; };
   return 'ok';
 })()`;
 
@@ -198,16 +199,17 @@ async function main() {
     c1.earned > 50 && c1.earned < 90 && c1.segs === 1,
     'earned=' + c1.earned.toFixed(2) + '（时薪≈57.14）已工作=' + c1.worked);
 
-  /* ---------- M3 打卡 → 全自动：按班次重算，不叠加 ---------- */
+  /* ---------- M3 打卡 → 全自动：v1.2.2 起本班从切换时刻起算 ---------- */
   await at(18, 30);
   await setMode('auto');
   await save();
   await sleep(600);
   const d1 = await R(SNAP);
   const perDay = 12000 / 21;
-  record('M3', '再切回「全自动」：金额变成按班次算的全天值（≈日薪 571.43），不是 1h 那笔 + 全天',
-    near(d1.earned, perDay, 30) && d1.auto === true,
-    'earned=' + d1.earned.toFixed(2) + ' 日薪=' + perDay.toFixed(2));
+  // 18:30 已经过了 18:00 下班点：切换等于「今天到此为止」，不补算，更不会 1h + 全天叠加
+  record('M3', '再切回「全自动」：旧口径那笔作废；18:30 已过下班点 → 今天不补算，也不是 1h + 全天',
+    d1.earned < 0.05 && d1.auto === true,
+    'earned=' + d1.earned.toFixed(2) + ' 状态=' + d1.state + ' 日薪=' + perDay.toFixed(2));
 
   /* ---------- M4 定点打卡：同样是「没打卡就没钱」 ---------- */
   await at(18, 40);
@@ -221,8 +223,12 @@ async function main() {
 
   /* ---------- M5 只改工资、不改模式：不能归零 ---------- */
   await closeSheet();
+  // v1.2.2：切换后本班从切换时刻起算，所以先把时钟放到班次内（15:00）再切，
+  // 切完再走 1 小时，当天才有「已固化的钱」可供后面验证「只改薪不清零」
+  await at(15, 0);
   await firstRun('auto');            // 回到全自动
-  await sleep(400);
+  await R(`window.__later(3600e3); 'ok'`);   // → 16:00
+  await sleep(800);
   const f0 = await R(SNAP);
   await openSheet();
   await R(`(() => { const e = document.querySelector('#inSalary'); e.value = '15000';
@@ -272,8 +278,9 @@ async function main() {
   await sleep(600);
   const g2 = await R(SNAP);
   record('M6', '当天有 1 小时班外加班补录，切到全自动：补录那笔钱仍在（账本与加班时长都没被抹掉）',
+    // 20:30 切回全自动已过 18:00 下班点：今天不再补算正班，屏幕上只该剩补录那笔
     fixOpen && fixAmt > 40 && g2.fixes === 1 && g2.otSec >= 3500
-      && g2.earned >= fixAmt + (12000 / 21) * 0.9,
+      && near(g2.earned, fixAmt, 1.5),
     '补录后=' + fixAmt.toFixed(2) + ' 切模式后=' + g2.earned.toFixed(2)
     + ' 补录条数=' + g2.fixes + ' 加班秒=' + g2.otSec
     + ' | settled=' + g2.settled.toFixed(2) + ' 当日明细=' + g2.logToday.toFixed(2)
@@ -375,6 +382,8 @@ function writeReport(pass) {
 
 app.whenReady().then(() => {
   ipcMain.handle('app:version', () => PKG_VERSION);
+  ipcMain.handle('app:data-path', () => path.join(require('os').tmpdir(), 'dgjz-harness-mode-reset'));
+  ipcMain.handle('app:tray', () => ({ hasTray: true }));
   ipcMain.handle('holidays:fetch', () => null);
   ipcMain.handle('data:export', () => ({ canceled: true }));
   ipcMain.handle('data:import', () => ({ canceled: true }));

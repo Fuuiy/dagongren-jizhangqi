@@ -40,7 +40,11 @@
     // 点窗口 × 时收进托盘还是直接退出
     closeToTray: true,
     // 加班费倍率：只作用于「补录的班外加班」
-    otRate: 1
+    otRate: 1,
+    // 切换计时方式的那一刻：本班从这时起算（null = 从班次开始算，也就是没切过）
+    // 只对 timerFromKey 这一班有效，换班/次日自动作废
+    timerFrom: null,
+    timerFromKey: null
   };
 
   const EMOJIS = ['🎯', '📱', '💻', '🎧', '🏠', '✈️', '🎁', '🍰', '👗', '🚗'];
@@ -133,6 +137,9 @@
     if (typeof m.confirmedByUser !== 'boolean') m.confirmedByUser = m.inited === true;
     if (typeof m.closeToTray !== 'boolean') m.closeToTray = true;
     m.otRate = (m.otRate === 1.5 || m.otRate === 2) ? m.otRate : 1;
+    // 切换模式后的「本班起算点」：老存档没有就是没切过 → null
+    if (typeof m.timerFrom !== 'number' || !isFinite(m.timerFrom)) m.timerFrom = null;
+    if (typeof m.timerFromKey !== 'string') m.timerFromKey = null;
     // 旧版本日期键没有前导零（2026-11-4），外部导入的备份又是有的（2026-11-04）。
     // 统一迁移成补零格式，同一天撞上了就合并，否则明细里一天会拆成两行
     const normKey = (k) => {
@@ -384,12 +391,26 @@
     return s.length > 0 && s[s.length - 1].to != null;
   }
 
+  // 这一班的「计薪起点」：正常是班次开始；如果用户中途切过计时方式，
+  // 则从切换那一刻起算（切换 = 今天重新开始，不能让新口径把切换前的时段白送一遍）
+  function timerStartOf(b) {
+    const tf = cfg.timerFrom;
+    if (typeof tf !== 'number' || !isFinite(tf)) return b.start;
+    // 只有「全自动」用起算点。定点打卡的规则是「按设定班次全天计薪」，
+    // 从切换时刻算会把「早退也拿全天」这条交底约定弄坏
+    if (!(cfg.clockFrom === 'schedule' && cfg.autoRun)) return b.start;
+    // 只对「这一班」有效：换到别的班次/第二天自动作废，不会把起算点带到明天
+    if (cfg.timerFromKey !== dayKey(b.start)) return b.start;
+    return Math.max(b.start, Math.min(tf, b.end));
+  }
+
   // 自动模式：按设定时间算，午休自动暂停
   function scheduleSeconds(now, b) {
+    const s0 = timerStartOf(b);
     const t1 = Math.min(now, b.end);
-    if (t1 <= b.start) return 0;
-    let sec = (t1 - b.start) / 1000;
-    const ls = Math.max(b.start, b.lunchStart);
+    if (t1 <= s0) return 0;
+    let sec = (t1 - s0) / 1000;
+    const ls = Math.max(s0, b.lunchStart);
     const le = Math.min(t1, b.lunchEnd);
     if (le > ls) sec -= (le - ls) / 1000;
     return Math.max(0, sec);
@@ -442,13 +463,25 @@
     const onLeave = isOnLeaveNow(now);
     const onLunch = auto && b.hasLunch && now >= b.lunchStart && now < b.lunchEnd;
 
+    // 切换计时方式时已经过了下班点：这一班在新口径下「没开始就结束了」，
+    // 不能再按整天算钱，状态也不该说"已收工"（那是干完了才有的词）。
+    // 只对全自动有意义：定点打卡没打卡天然就是 0，「过点」由 after 分支负责。
+    const switchedCut = (() => {
+      if (!auto) return false;
+      const tf = cfg.timerFrom;
+      if (typeof tf !== 'number' || !isFinite(tf)) return false;
+      if (cfg.timerFromKey !== dayKey(b.start)) return false;
+      return tf >= b.end;
+    })();
+
     let running = false;
     if (onLeave || onLunch) running = false;
-    else if (auto) running = within;
+    else if (auto) running = within && !switchedCut;
     else if (mode === 'schedule') running = started && !done && within;
     else running = started && !onBreak;         // 打卡那一刻：不受上下班时间约束
 
-    return { b, mode, auto, origin, started, onBreak, onLunch, done, before, within, after, running, inWindow, onLeave };
+    return { b, mode, auto, origin, started, onBreak, onLunch, done, before, within, after,
+      running, inWindow, onLeave, switchedCut };
   }
 
   // 跨月了，按当月实际重新数一遍工作日
@@ -587,13 +620,17 @@
     cfg.settled += amount;                       // 只增不改
     // 跨天结算时钱属于「班次那一天」，不能记到结算发生的今天
     const logKey = dayKey(shiftStart);
-    cfg.dailyLog[logKey] = (cfg.dailyLog[logKey] || 0) + amount;
+    // 0 元结算（切换模式时已经过了下班点）不要往明细里塞一行「¥0.00」
+    if (amount > 0.0000001) cfg.dailyLog[logKey] = (cfg.dailyLog[logKey] || 0) + amount;
     cfg.doneShift = shiftStart;
+    // sec 是「这一班一共多少秒」（不是增量），所以不能和 base.seconds 相加 ——
+    // 改了上下班时间后再结算一次，相加会变成 8h+7h=15h，钱却只给 8h
+    const shiftSec = Math.max(base.seconds, sec);
     cfg.lastShift = {
       start: shiftStart,
       amount: base.amount + amount,
-      seconds: base.seconds + sec,
-      overtime: Math.max(0, base.seconds + sec - c.capSec),
+      seconds: shiftSec,
+      overtime: Math.max(0, shiftSec - c.capSec),
       actualFrom: actualFrom,
       actualTo: actualTo
     };
@@ -812,9 +849,13 @@
     const overtimeSec = st.onLeave ? 0 : Math.max(0, totalSec - c.capSec) + otFix;
 
     // 今天有记录（在跑 / 已请假结算过 / 自动模式）就看今天，否则停在「本班赚了多少」
-    const last = (cfg.lastShift && cfg.lastShift.start === st.b.start) ? cfg.lastShift : null;
+    // 按「同一班」而不是「同一时间戳」比：改了上下班时间后 start 会变，但那一班还是那一班
+    const last = (cfg.lastShift && dayKey(cfg.lastShift.start) === dayKey(st.b.start)) ? cfg.lastShift : null;
     const hasToday = segs().length > 0 || st.auto || base.amount > 0;
-    const shownSec = (hasToday ? totalSec : (last ? last.seconds : 0)) + otFix;
+    // 已收工：工时用「真正结算的秒数」。否则改了班次会出现「干了 7 小时却拿 8 小时的钱」
+    const shownSec = (st.done && last)
+      ? last.seconds + otFix
+      : (hasToday ? totalSec : (last ? last.seconds : 0)) + otFix;
     if (!hasToday) shownEarned = last ? last.amount : 0;
     lastShownEarned = shownEarned;
 
@@ -1050,7 +1091,12 @@
     if (st.onLeave) { el.textContent = '今天请假'; el.classList.add('off'); return; }
     if (st.onBreak || st.onLunch) { el.textContent = '午休中 ⏸'; el.classList.add('off'); return; }
     if (st.running) { el.textContent = '工作中 ♥'; el.classList.add('working'); return; }
-    if (st.done) { el.textContent = '今日已收工'; el.classList.add('off'); return; }
+    if (st.done) {
+      // 切换模式时已经过了下班点：这一班在新口径下等于没开始，不能说"已收工"
+      el.textContent = st.switchedCut ? '今天过点了' : '今日已收工';
+      el.classList.add('off');
+      return;
+    }
 
     // 自动模式：状态完全由时间推出来
     if (st.auto) {
@@ -1183,9 +1229,15 @@
     if (st.auto) {
       btn.classList.add('disabled');
       if (st.done) {
-        ico.textContent = '✅';
-        txt.textContent = '今 日 已 收 工';
-        hintText.textContent = '明天 ' + cfg.start + ' 自动开始';
+        if (st.switchedCut) {
+          ico.textContent = '🌙';
+          txt.textContent = '今 天 过 点 了';
+          hintText.textContent = '换计时方式时已过 ' + cfg.end + '，这一班不补算；明天 ' + cfg.start + ' 自动开始';
+        } else {
+          ico.textContent = '✅';
+          txt.textContent = '今 日 已 收 工';
+          hintText.textContent = '明天 ' + cfg.start + ' 自动开始';
+        }
       } else if (st.before) {
         ico.textContent = '😴';
         txt.textContent = '还 没 到 上 班 时 间';
@@ -2986,6 +3038,8 @@
     const now = Date.now();
     const oldMode = cfg.clockFrom;
     const oldAuto = !!cfg.autoRun;
+    // 首次设置（还没 inited）不按"切换"处理：全自动仍从班次开始算
+    const wasInited = cfg.inited === true;
     let wasRunning = false;
     if (!timeChanged) {
       // 用「改之前的模式」决定怎么固化：
@@ -3026,6 +3080,16 @@
       // 换了玩法就不能替用户「接着计时」：
       // 打卡那一刻要他自己点打卡，否则切完模式会凭空开始上班（v1.1.0 前就是这样）
       wasRunning = false;
+      // 新口径从「现在」起算。不这样做的话，切到全自动/定点会立刻按 08:00 起
+      // 把今天整天补算一遍 —— 和弹窗里承诺的「从 0 重新开始」直接打架。
+      // 首次设置（还没 inited）不算切换，全自动该怎么算还怎么算。
+      if (cfg.clockFrom === 'schedule' && wasInited) {
+        cfg.timerFrom = now;
+        cfg.timerFromKey = dayKey(shiftAt(now).start);
+      } else {
+        cfg.timerFrom = null;
+        cfg.timerFromKey = null;
+      }
     }
 
     const dhVal = $('#inDailyHours') ? num($('#inDailyHours').value, 0) : 0;
@@ -3044,7 +3108,13 @@
         cfg.clockIn = null;
       }
       // 今天已经收工：收工状态和金额都保留，别因为改午休变成「没上班」
-      if (cfg.doneShift != null) wasRunning = false;
+      if (cfg.doneShift != null) {
+        wasRunning = false;
+        // 班次起点变了，收工标记要跟着挪到新班次上，
+        // 否则 autoSettle 会认为「今天还没结算」，再结一次（工时被叠加成 15 小时）
+        cfg.doneShift = shiftAt(now).start;
+        if (cfg.lastShift) cfg.lastShift.start = cfg.doneShift;
+      }
     }
 
     // 改完参数接着计：新开一段，之前的钱已经固化，不会被重算
