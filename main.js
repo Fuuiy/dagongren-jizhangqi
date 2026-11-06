@@ -165,12 +165,8 @@ function createTray() {
       { label: '退出打工人记账器', click: quitApp }
     ]));
   });
-  tray.setContextMenu(Menu.buildFromTemplate([
-    { label: '显示主界面', click: showWindow },
-    { label: '缩成小窗', click: () => { showWindow(); if (win) win.webContents.send('tray:cmd', 'toggle-compact'); } },
-    { type: 'separator' },
-    { label: '退出打工人记账器', click: quitApp }
-  ]));
+  // 只保留「右键时动态弹」这一套菜单：
+  // 同时 setContextMenu 会在部分 Windows 上出现「系统菜单 + 手弹菜单」双弹
   return tray;
 }
 
